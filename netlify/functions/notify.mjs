@@ -1,6 +1,6 @@
 // POST /api/notify — emails the family when a reading is low / very low / very high.
 // Recipients are read from the *synced settings* (never from the request) so this can't be used as an open mail relay.
-import { json, store, spaceKey, stateKey, pinHash, validCreds, status, LABEL, fmt, sast, sendMail, siteUrl, escHtml, validEmail } from './_lib/common.mjs';
+import { json, store, spaceKey, stateKey, pinHash, validCreds, status, LABEL, fmt, sast, sendMail, siteUrl, escHtml, recipients } from './_lib/common.mjs';
 
 const TIPS = {
   'crit-low': 'Give 15–20 g fast sugar (½ cup juice / regular cooldrink / 3–4 glucose tablets) and recheck in 15 minutes. If drowsy, confused or unresponsive call 10177 / 112 — nothing in the mouth, recovery position.',
@@ -23,7 +23,7 @@ export default async (req) => {
   if (s.email_alerts === false) return json({ ok: true, sent: 0, reason: 'alerts_off' });
   const level = status(v, s);
   if (level === 'ok' || level === 'high') return json({ ok: true, sent: 0, reason: 'not_alert_worthy' });
-  const to = (s.carers || []).filter(validEmail).slice(0, 5);
+  const to = recipients(doc).map(x => x.email);
   if (!to.length) return json({ ok: true, sent: 0, reason: 'no_recipients' });
 
   // rate limit: one email per level per 30 minutes

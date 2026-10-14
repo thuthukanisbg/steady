@@ -57,3 +57,15 @@ export async function sendMail({ to, subject, html, text }) {
 export const siteUrl = () => process.env.URL || process.env.DEPLOY_PRIME_URL || '';
 export const escHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const validEmail = e => typeof e === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e) && e.length < 120;
+
+/* ---- roles: owner PIN (full access) vs family PIN (view-only) ---- */
+export function roleOf(doc, ph) { return doc.pin === ph ? 'owner' : (doc.vpin && doc.vpin === ph ? 'viewer' : null); }
+export const FAMILY_WRITE = new Set(['note', 'follower']);   // the only things view-only family may add/remove
+/* everyone who gets alert + morning emails: legacy settings.carers plus named follower records */
+export function recipients(doc) {
+  const s = doc?.recs?.settings || {}, seen = new Set(), out = [];
+  const add = (email, name) => { const e = String(email || '').trim().toLowerCase(); if (validEmail(e) && !seen.has(e)) { seen.add(e); out.push({ email: e, name: name || '' }); } };
+  (s.carers || []).slice(0, 5).forEach(e => add(e, ''));
+  Object.values(doc?.recs || {}).filter(r => r.type === 'follower' && !r.del).slice(0, 10).forEach(r => add(r.email, r.name));
+  return out.slice(0, 12);
+}

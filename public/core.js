@@ -37,7 +37,7 @@ const LS = {
   set(k,v){try{localStorage.setItem('steady.'+k,JSON.stringify(v));return true}catch(e){return false}}
 };
 let recs = LS.get('recs',{});
-let meta = Object.assign({role:'patient',who:'',code:'',pin:'',seq:0,pending:{},onboarded:false,device:uid(),fired:{},recheck:0,pause:0,notified:{},installSeen:0},LS.get('meta',{}));
+let meta = Object.assign({role:'patient',who:'',code:'',pin:'',seq:0,pending:{},onboarded:false,device:uid(),ro:false,vpin:'',hasFamilyPin:false,fired:{},recheck:0,pause:0,notified:{},installSeen:0},LS.get('meta',{}));
 A.meta = meta;
 function persist(){LS.set('recs',recs);LS.set('meta',meta)}
 A.persist = persist;
@@ -48,7 +48,7 @@ const DEF = {
   crit_low:3.0, low:3.9, high:10.0, crit_high:13.9,
   carb_meal:45, carb_snack:15, walk_goal:30, walk_week:150, treats_week:2, stack_hours:3,
   insulins:[{n:'Rapid-acting (mealtime)',c:'rapid'},{n:'Long-acting (basal)',c:'long'}],
-  plan_note:'', carers:[], my_email:'', email_alerts:true, email_reminders:true, miss_hours:8,
+  plan_note:'', carers:[], my_email:'', email_alerts:true, email_reminders:true, email_digest:true, miss_hours:8,
   reminders:[
     {id:'r1',l:'Check sugar (fasting)',t:'07:00',k:'sugar',on:true},
     {id:'r2',l:'Breakfast',t:'07:30',k:'meal',on:true},
@@ -63,6 +63,7 @@ const DEF = {
 };
 const cfg = ()=>Object.assign({},DEF,recs.settings||{});
 function saveSettings(patch){
+  if(meta.ro){ if(A.toast) A.toast('View-only — only she can change this'); return; }
   const cur=recs.settings||{id:'settings',type:'settings',ts:0};
   recs.settings=Object.assign({},cur,patch,{id:'settings',type:'settings',u:now(),by:meta.who||'me'});
   meta.pending.settings=1; persist(); A.scheduleSync();
@@ -70,13 +71,16 @@ function saveSettings(patch){
 Object.assign(A,{cfg,saveSettings,DEF});
 
 /* ---------- records ---------- */
+const RO_OK=['note','follower'];
 function put(r){
+  if(meta.ro&&!RO_OK.includes(r.type)){ if(A.toast) A.toast('View-only — family can look but not edit'); return r; }
   r.id=r.id||uid(); r.u=now(); r.ts=r.ts||now();
   r.by=r.by||meta.who||(meta.role==='carer'?'Family':(cfg().name||'Me'));
   recs[r.id]=r; meta.pending[r.id]=1; persist(); A.scheduleSync(); return r;
 }
 function del(id){
   const r=recs[id]; if(!r) return;
+  if(meta.ro&&!RO_OK.includes(r.type)){ if(A.toast) A.toast('View-only — family can look but not edit'); return; }
   recs[id]={id,type:r.type,del:1,ts:r.ts,u:now()}; meta.pending[id]=1; persist(); A.scheduleSync();
 }
 const list = (type)=>Object.values(recs).filter(r=>r.type===type&&!r.del).sort((a,b)=>b.ts-a.ts);
@@ -337,15 +341,16 @@ A.doSync=async function(opts={}){
   const sentU={}; const out=[];
   Object.keys(meta.pending).forEach(id=>{ if(recs[id]){sentU[id]=recs[id].u; out.push(recs[id]);} else delete meta.pending[id]; });
   try{
-    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out})});
+    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined})});
     const j=await res.json().catch(()=>({}));
-    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
+    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
     let newCrit=[];
     (j.records||[]).forEach(r=>{
       const cur=recs[r.id];
       if(!cur||r.u>cur.u){ const {s,...rest}=r; recs[r.id]=rest; if(!cur&&r.type==='glucose'&&!r.del&&r.by!==meta.who&&now()-r.ts<45*MIN&&gstat(r.v)!=='ok') newCrit.push(rest); }
     });
     Object.keys(sentU).forEach(id=>{ if(recs[id]&&recs[id].u===sentU[id]) delete meta.pending[id]; });
+    if(j.role){ meta.ro=j.role==='viewer'; if(meta.ro) meta.role='carer'; meta.hasFamilyPin=!!j.hasFamilyPin; if(opts.vpin) meta.vpin=opts.vpin; }
     meta.seq=j.seq; persist(); sync.last=now(); setSync('on');
     if(newCrit.length&&A.onRemoteAlert) A.onRemoteAlert(newCrit);
     if(A.onData) A.onData();
@@ -356,14 +361,14 @@ A.doSync=async function(opts={}){
     setSync(offline?'offline':'err',e.message); return {ok:false,error:e};
   }
 };
-A.joinSpace=async function(code,pin,create){
+A.joinSpace=async function(code,pin,create,vpin){
   // Joining an existing space adopts its shared settings; creating uploads everything on this phone.
   const bak=recs.settings, bakPending=meta.pending.settings;
   meta.code=code; meta.pin=pin; meta.seq=0;
   if(!create){ delete recs.settings; delete meta.pending.settings; }
   Object.keys(recs).forEach(id=>meta.pending[id]=1);
   persist();
-  const r=await A.doSync({create});
+  const r=await A.doSync({create,vpin});
   if(!r.ok){
     const e=r.error; meta.code='';meta.pin='';
     if(!create&&bak){ recs.settings=bak; if(bakPending) meta.pending.settings=1; }
@@ -371,7 +376,7 @@ A.joinSpace=async function(code,pin,create){
   }
   return {ok:true};
 };
-A.leaveSpace=function(){meta.code='';meta.pin='';meta.seq=0;persist();setSync('off')};
+A.leaveSpace=function(){meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;persist();setSync('off')};
 A.genCode=function(){const al='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(12);crypto.getRandomValues(b);const s=[...b].map(x=>al[x%al.length]).join('');return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12);};
 A.notifyServer=function(rec){
   if(!meta.code||!cfg().email_alerts) return;

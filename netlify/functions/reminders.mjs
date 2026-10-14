@@ -1,5 +1,6 @@
 // Scheduled every 15 min. (1) emails her due reminders when the app is closed, (2) alerts family if no sugar check for too long.
-import { store, stateKey, sast, sendMail, siteUrl, escHtml, validEmail } from './_lib/common.mjs';
+import { store, stateKey, sast, sendMail, siteUrl, escHtml, validEmail, recipients } from './_lib/common.mjs';
+import { buildDigest } from './_lib/digest.mjs';
 
 export default async () => {
   const st = store(), { blobs } = await st.list({ prefix: 'space/' });
@@ -29,7 +30,7 @@ export default async () => {
       }
 
       // 2) missed-check alert -> family
-      const carers = (s.carers || []).filter(validEmail).slice(0, 5);
+      const people = recipients(doc), carers = people.map(x => x.email);
       if (s.email_alerts !== false && carers.length && now.h >= 8 && now.h <= 20) {
         const lastTs = Math.max(0, ...Object.values(doc.recs).filter(r => r.type === 'glucose' && !r.del).map(r => r.ts || 0));
         const hrs = lastTs ? (Date.now() - lastTs) / 36e5 : null;
@@ -41,6 +42,17 @@ export default async () => {
             text: `${name} has not logged a sugar reading for ${Math.floor(hrs)} hours.` });
           if (r.ok) { state.missAt = Date.now(); dirty = true; sent++; }
         }
+      }
+
+      // 3) morning digest -> family (once a day, from 07:00 SAST)
+      if (s.email_digest !== false && people.length && now.h >= 7 && now.h < 10 && !state.sent['digest|' + now.date]) {
+        let ok = 0;
+        for (const p of people) {            // one email each so it can say "Good morning, Thembeka"
+          const d = buildDigest(doc, s, now.date, (p.name || '').split(' ')[0]);
+          const r = await sendMail({ to: [p.email], subject: d.subject, html: d.html, text: d.text });
+          if (r.ok) ok++; else console.error('digest mail failed:', r.reason);
+        }
+        if (ok) { state.sent['digest|' + now.date] = 1; dirty = true; sent += ok; }
       }
 
       // prune old "sent" markers

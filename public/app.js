@@ -8,12 +8,13 @@ const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let F={}, pendingRender=false, tt;
 
 /* ---------- toast / sheet / render ---------- */
+A.toast=m=>toast(m);
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2800);}
 function sheet(html){const s=$('#sheet');s.innerHTML=`<div class="scrim" data-act="close"></div><div class="panel" role="document"><div class="grab"></div>${html}</div>`;s.classList.add('open');document.body.style.overflow='hidden';}
 function setBody(html){$('#sheet .panel').innerHTML='<div class="grab"></div>'+html;}
 function closeSheet(){const s=$('#sheet');s.classList.remove('open');s.innerHTML='';document.body.style.overflow='';F={};if(pendingRender){pendingRender=false;softRender();}}
 function renderNav(){
-  const it=[['home','🏠','Home'],['food','🥗','Food'],null,['progress','📊','Progress'],['care','💞','Care']];
+  const it=meta.ro?[['home','🏠','Home'],['food','🥗','Food'],['progress','📊','Progress'],['care','💞','Care']]:[['home','🏠','Home'],['food','🥗','Food'],null,['progress','📊','Progress'],['care','💞','Care']];
   $('#nav').innerHTML=it.map(i=>i?`<button class="n ${U.tab===i[0]?'on':''}" data-act="go" data-v="${i[0]}"><span class="i">${i[1]}</span>${i[2]}</button>`:`<button class="fab" data-act="add" data-v="glucose" aria-label="Add entry">＋</button>`).join('');
 }
 let rendering=false;
@@ -130,6 +131,7 @@ const ACT={};
 ACT.go=el=>{closeSheet();go(el.dataset.v);};
 ACT.close=()=>closeSheet();
 ACT.yes=()=>{const f=F.yes;closeSheet();f&&f();};
+const _add=null;
 ACT.add=el=>openAdd(el.dataset.v);
 ACT.pick=el=>{
   const g=el.dataset.grp,v=el.dataset.v;
@@ -209,7 +211,7 @@ ACT['note-post']=()=>{const t=($('#notetext').value||'').trim();if(!t){toast('Wr
 ACT['note-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this note?','Delete',()=>{A.del(id);render(true);});};
 
 /* profile actions */
-ACT.role=el=>{meta.role=el.dataset.v;persist();render(true);};
+ACT.role=el=>{if(meta.ro)return;meta.role=el.dataset.v;persist();render(true);};
 ACT.avatar=el=>{saveSettings({avatar:el.dataset.v});render(true);};
 ACT.unit=el=>{saveSettings({units:el.dataset.v});render(true);};
 ACT.tog=el=>{const k=el.dataset.k;saveSettings({[k]:!cfg()[k]});render(true);};
@@ -219,6 +221,15 @@ ACT['rem-toggle']=el=>{saveSettings({reminders:cfg().reminders.map(r=>r.id===el.
 ACT['rem-del']=el=>{saveSettings({reminders:cfg().reminders.filter(r=>r.id!==el.dataset.id)});render(true);};
 ACT['rem-add']=()=>{const l=($('#remlabel').value||'').trim();if(!l){toast('Name the reminder');return;}saveSettings({reminders:[...cfg().reminders,{id:A.uid(),l,t:$('#remtime').value||'12:00',k:$('#remkind').value,on:true}]});render(true);toast('Reminder added');};
 ACT['carer-add']=()=>{const e=($('#careremail').value||'').trim().toLowerCase();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){toast('That email doesn’t look right');return;}const cur=cfg().carers||[];if(cur.includes(e)||cur.length>=5){toast(cur.includes(e)?'Already added':'Up to 5 emails');return;}saveSettings({carers:[...cur,e]});render(true);toast('Added');};
+ACT['follow-add']=()=>{
+  const e=($('#careremail').value||'').trim().toLowerCase(), n=(($('#carername')||{}).value||'').trim().slice(0,40);
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){toast('That email doesn’t look right');return;}
+  const fs=A.list('follower'); if(fs.some(f=>f.email===e)||(cfg().carers||[]).includes(e)){toast('Already added');return;} if(fs.length>=10){toast('Up to 10 people');return;}
+  put({type:'follower',email:e,name:n||(meta.ro?meta.who:'')||''});render(true);toast('Added ✔');};
+ACT['follow-del']=el=>{A.del(el.dataset.id);render(true);toast('Removed');};
+ACT['famepin']=()=>sheet(`<h2>Family view-only PIN</h2><div class="lead">Family who join with <b>this</b> PIN can watch everything but can’t change anything. Keep her own PIN to yourself.</div><label class="f">Family PIN (4–8 digits, different from yours)</label><input class="inp" id="fpin" inputmode="numeric" maxlength="8" value="${esc(meta.vpin||'')}" autocomplete="off"><button class="btn primary block mt2" data-act="famepin-go">Save family PIN</button><div id="fperr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`);
+ACT['famepin-go']=async el=>{const v=($('#fpin').value||'').trim(),err=$('#fperr');if(!/^\d{4,8}$/.test(v)){err.textContent='4–8 digits please.';return;}if(v===meta.pin){err.textContent='Must be different from her PIN.';return;}el.disabled=true;const r=await A.doSync({vpin:v});if(!r.ok){el.disabled=false;err.textContent=(r.error&&r.error.message)||'Could not save — try again';return;}closeSheet();render(true);toast('Family PIN saved ✔');};
+ACT['show-fpin']=el=>{const s=$('#fpinshow');const on=s.textContent!=='••••';s.textContent=on?'••••':(meta.vpin||'(set on another phone)');el.textContent=on?'Show':'Hide';};
 ACT['carer-del']=el=>{saveSettings({carers:cfg().carers.filter((_,k)=>k!==+el.dataset.i)});render(true);};
 ACT['notif-enable']=()=>{if(!('Notification' in window)){toast('Not supported on this browser');return;}Notification.requestPermission().then(p=>{render(true);if(p==='granted'){notify('Steady','Reminders are on 🎉','welcome');}});};
 ACT['show-pin']=el=>{const s=$('#pinshow');const on=s.textContent!=='••••';s.textContent=on?'••••':meta.pin;el.textContent=on?'Show':'Hide';};
@@ -235,6 +246,7 @@ function syncHtml(){
   return `<h2>${create?'Create a family space':'Join with a code'}</h2><div class="lead">${create?'You’ll get a code. Share it and your PIN with family so they can join.':'Type the code and PIN you were given.'}</div>
   <label class="f">Family code</label><input class="inp" id="scode" value="${esc(F.code||'')}" ${create?'readonly':''} placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off" style="font-weight:800;letter-spacing:.06em">
   <label class="f">${create?'Choose a PIN (4–8 digits)':'PIN'}</label><input class="inp" id="spin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
+  ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:'<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>'}
   <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button><div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
 }
 ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():''};sheet(syncHtml());};
@@ -242,11 +254,14 @@ ACT['sync-go']=async el=>{
   const code=($('#scode').value||'').trim().toUpperCase(), pin=($('#spin').value||'').trim(), err=$('#syncerr');
   if(code.replace(/-/g,'').length<8){err.textContent='That code looks too short.';return;}
   if(!/^\d{4,8}$/.test(pin)){err.textContent='PIN must be 4–8 digits.';return;}
+  const mode=F.mode, vp=(($('#svpin')||{}).value||'').trim();
+  if(vp&&!/^\d{4,8}$/.test(vp)){err.textContent='Family PIN must be 4–8 digits.';return;}
+  if(vp&&vp===pin){err.textContent='Family PIN must differ from her PIN.';return;}
   el.disabled=true;el.textContent='Connecting…';err.textContent='';
-  const mode=F.mode, r=await A.joinSpace(code,pin,mode==='create');
+  const r=await A.joinSpace(code,pin,mode==='create',vp||undefined);
   if(!r.ok){el.disabled=false;el.textContent=mode==='create'?'Create & connect':'Join';err.textContent=r.msg+(r.msg.includes('Sync problem')?' Is the site deployed to Netlify with functions enabled?':'');return;}
   meta.onboarded=true;persist();
-  if(mode==='create'){setBody(`<div class="center" style="font-size:54px">🎉</div><h2 class="center">Family space ready</h2><p class="center lead">Share these on the other phone (Profile → Family sync → Join):</p><div class="card mt center"><div class="b" style="font-size:22px;letter-spacing:.08em">${esc(code)}</div><div class="mut sm mt">PIN</div><div class="b" style="font-size:22px">${esc(pin)}</div></div><button class="btn primary block mt2" data-act="close">Done</button>`);}
+  if(mode==='create'){setBody(`<div class="center" style="font-size:54px">🎉</div><h2 class="center">Family space ready</h2><p class="center lead">Share these on the other phone (Profile → Family sync → Join):</p><div class="card mt center"><div class="b" style="font-size:22px;letter-spacing:.08em">${esc(code)}</div><div class="mut sm mt">Her PIN (keep private)</div><div class="b" style="font-size:22px">${esc(pin)}</div>${vp?`<div class="mut sm mt">Family PIN (view-only — share this)</div><div class="b" style="font-size:22px">${esc(vp)}</div>`:''}</div><button class="btn primary block mt2" data-act="close">Done</button>`);}
   else{closeSheet();toast('Connected ✔');}
   render(true);
 };
@@ -292,7 +307,8 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();f(el,e);}});
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='foodq'){U.foodQ=t.value;$('#foodlist').innerHTML=U.foodList();}
