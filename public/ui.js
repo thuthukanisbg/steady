@@ -29,14 +29,14 @@ function trend(g){
 }
 function heroCard(g){
   const last=g[0];
-  if(!last) return `<div class="hero"><div class="lbl">Blood sugar</div><div class="display" style="font-size:30px;margin:8px 0 6px">No readings yet</div><p class="meta">Check your sugar and log it — it takes five seconds.</p><div class="mt"><button class="btn white" data-act="add" data-v="glucose">＋ Log a reading</button></div></div>`;
+  if(!last) return `<div class="hero"><div class="lbl">Blood sugar</div><div class="display" style="font-size:30px;margin:8px 0 6px">No readings yet</div><p class="meta">Check your sugar and log it — it takes five seconds.</p>${meta.ro?'':'<div class="mt"><button class="btn white" data-act="add" data-v="glucose">＋ Log a reading</button></div>'}</div>`;
   const st=gstat(last.v), s=SL[st], crit=st==='crit-low'||st==='crit-high';
   return `<div class="hero s-${st} ${crit?'crit':''}">
     <div class="row between"><span class="lbl">Blood sugar</span><span class="pill">${s.e} ${s.t}</span></div>
     <div style="margin:10px 0 4px"><span class="big">${fmtG(last.v)}</span><span class="unit">${unitL()}</span></div>
     <div class="meta">${ago(last.ts)}${last.ctx?' · '+ctxL(last.ctx):''}${trend(g)?' · '+trend(g):''}</div>
     ${zones(last.v)}
-    <div class="row between mt" style="margin-top:16px"><span class="xs" style="opacity:.75">${fmtG(cfg().low)}–${fmtG(cfg().high)} is your target</span><button class="btn white sm" data-act="add" data-v="glucose">＋ New reading</button></div>
+    <div class="row between mt" style="margin-top:16px"><span class="xs" style="opacity:.75">${fmtG(cfg().low)}–${fmtG(cfg().high)} is your target</span>${meta.ro?'':'<button class="btn white sm" data-act="add" data-v="glucose">＋ New reading</button>'}</div>
   </div>`;
 }
 function guideCard(st,ctx){
