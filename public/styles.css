@@ -255,3 +255,8 @@ button.card{font:inherit;color:inherit}
 .chatbar{display:flex;gap:8px;align-items:flex-end;position:sticky;bottom:calc(84px + var(--safe-b,0px));padding-top:8px}
 .chatbar .ta{flex:1;min-height:42px;margin:0}
 .nav button.n .bdg{position:absolute;margin:-30px 0 0 22px;font-size:10px;padding:0 5px}
+
+.sosbtn{width:100%;display:flex;flex-direction:column;align-items:center;gap:2px;padding:16px;border:0;border-radius:20px;background:linear-gradient(135deg,#d6303a,#a5161f);color:#fff;font-size:22px;font-weight:800;box-shadow:0 8px 22px rgba(190,30,40,.35);cursor:pointer}
+.sosbtn span{font-size:30px}.sosbtn small{font-size:12px;font-weight:600;opacity:.9}
+.sosbtn:active{transform:scale(.98)}
+.sosb{margin-bottom:12px}.sosb .btn{text-decoration:none}

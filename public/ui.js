@@ -54,6 +54,7 @@ function pageHome(){
   let h=top(carer?(nm?nm+'’s day':'Her day'):`${greet}${nm?', '+nm:''}`,new Date().toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long'}));
   h+='<div class="stack">';
   h+=heroCard(g);
+  if(!meta.ro&&!carer) h+=`<button class="sosbtn" data-act="sos"><span>🆘</span> I need help<small>Alerts your family with your location</small></button>`;
   if(meta.recheck>now()) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Recheck in <span data-cd="recheck">${cd(meta.recheck)}</span></h3><div class="sm">Wait the full 15 minutes before testing again.</div></div><button class="btn sm white" data-act="add" data-v="glucose">Log</button></div></div>`;
   else if(meta.recheck) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Time to recheck!</h3><div class="sm">15 minutes are up — test and log your sugar.</div></div><button class="btn sm primary" data-act="add" data-v="glucose">Log</button></div></div>`;
   if(meta.walkStart) h+=`<div class="banner good"><div class="row between"><div><h3 style="margin:0">🚶 Walk in progress <span data-up="walk">${cd(2*now()-meta.walkStart)}</span></h3><div class="sm">Take water. Stop if you feel shaky or dizzy.</div></div><button class="btn sm primary" data-act="walk-finish">Finish</button></div></div>`;
@@ -252,7 +253,9 @@ function pageMe(){
   <div class="row between mt"><div><div class="k xs mut b">STREAK</div><div class="display" style="font-size:24px">🔥 ${gm.streak}</div></div><div><div class="k xs mut b">BADGES</div><div class="display" style="font-size:24px">🏅 ${gm.got}</div></div><div><div class="k xs mut b">CRAVINGS BEATEN</div><div class="display" style="font-size:24px">🛡️ ${gm.resisted}</div></div></div></div>`;
   h+=`<div class="card"><h3>🏆 Achievements</h3><div class="badges">${gm.badges.map(b=>`<div class="bd ${b.got?'got':''}"><div class="e">${b.e}</div><div class="n">${esc(b.n)}</div><div class="p">${b.got?'Earned!':esc(b.d)}</div>${b.got?'':`<div class="meter"><i style="width:${b.p/b.m*100}%"></i></div>`}</div>`).join('')}</div></div>`;
   h+=sec('👤 About',`${ro?`<div class="banner info"><div class="sm">👀 <b>View-only.</b> You can watch everything and leave notes, but only she can change entries and settings.</div></div>`:`<label class="f">This phone belongs to</label><div class="seg"><button class="${!carer?'on':''}" data-act="role" data-v="patient">Her</button><button class="${carer?'on':''}" data-act="role" data-v="carer">Family / carer</button></div>
-    <label class="f">Her name</label><input class="inp" data-set="name" value="${esc(c.name)}" placeholder="e.g. Nomsa">`}
+    <label class="f">Her name</label><input class="inp" data-set="name" value="${esc(c.name)}" placeholder="e.g. Nomsa">
+    <label class="f">Her phone number (for family’s “Call” button in an emergency)</label><input class="inp" type="tel" inputmode="tel" data-set="phone" value="${esc(c.phone||'')}" placeholder="e.g. 082 123 4567">
+    <button class="btn soft block mt" data-act="sos-test">📍 Allow location for the help button (alerts no one)</button>`}
     ${carer?`<label class="f">Your name (shown on notes)</label><input class="inp" id="whoname" value="${esc(meta.who||'')}" placeholder="e.g. Thuthu">`:''}
     ${ro?'':`<label class="f">Avatar</label><div class="emoji-grid">${SD.avatars.map(a=>`<button class="${a===c.avatar?'on':''}" data-act="avatar" data-v="${a}">${a}</button>`).join('')}</div>`}`,true);
   if(!ro){
@@ -285,12 +288,18 @@ function pageMe(){
       <button class="btn soft block mt" data-act="pinchg">Change her PIN</button>
       <div class="disc">Changing either PIN logs everyone else out — they must log in again.</div>
       <div class="disc">Family join with the code + <b>family PIN</b> via “Join with a code”. They can watch everything but not edit.</div>`}
+      <button class="btn soft block mt" data-act="invite">🔗 Share invite link (family then only types the PIN)</button>
       <div class="row mt"><button class="btn soft grow" data-act="sync-now">Sync now</button><button class="btn danger" data-act="sync-leave">Disconnect</button></div>`
     :`<div class="lead">Link two phones so what she logs shows up on yours instantly, with alerts when it matters.</div><div class="row mt"><button class="btn primary grow" data-act="open-sync" data-v="create">Create family space</button><button class="btn ghost grow" data-act="open-sync" data-v="join">Join with a code</button></div>`,!meta.code);
   h+=sec('📤 Data',`<button class="btn soft block" data-act="export">Download all data (CSV) for the doctor</button><button class="btn danger block mt" data-act="reset">Erase data on this phone</button><div class="disc">Synced data is stored in your Netlify site’s private storage. Keep the family code private.</div>`);
   h+=`<p class="disc center">Steady is a logging and coaching aid — not a medical device and not a substitute for professional care. In an emergency call 10177 / 112.</p>`;
   return h+'</div>';
 }
+
+/* ---------------- SOS banner ---------------- */
+U.sosBanner=()=>{const s=list('sos')[0];if(!s||s.status!=='open'||now()-s.ts>3*HOUR)return '';
+  const her=!meta.ro&&meta.role!=='carer', nm=cfg().name||'She', ph=String(cfg().phone||'').replace(/[^\d+]/g,'');
+  return `<div class="banner crit sosb"><h3>🆘 ${her?'Help alert sent':esc(nm)+' pressed the help button'} · ${ago(s.ts)}</h3><div class="row mt" style="flex-wrap:wrap;gap:8px">${!her&&ph?`<a class="btn primary" href="tel:${ph}">📞 Call ${esc(nm)}</a>`:''}${typeof s.lat==='number'?`<a class="btn soft" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${s.lat},${s.lng}">📍 Location</a>`:''}${her?`<button class="btn primary" data-act="sos-ok">✅ I’m OK now</button>`:`<button class="btn soft" data-act="sos-way">🚗 I’m on my way</button>`}</div></div>`;};
 
 /* ---------------- CHAT ---------------- */
 const mine=m=>!!meta.me&&m.a===meta.me;

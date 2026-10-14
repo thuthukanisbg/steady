@@ -24,7 +24,7 @@ function render(quiet){
   if(rendering) return; rendering=true;
   try{
     const fn={home:U.pageHome,food:U.pageFood,progress:U.pageProgress,care:U.pageCare,chat:U.pageChat,me:U.pageMe}[U.tab];
-    const html=`<div class="page${quiet?' noanim':''}">${fn()}</div>`;
+    const html=`<div class="page${quiet?' noanim':''}">${U.sosBanner?U.sosBanner():''}${fn()}</div>`;
     const ae=document.activeElement; if(ae&&ae!==document.body&&$('#view').contains(ae)){try{ae.blur()}catch(e){}}
     $('#view').innerHTML=html; renderNav(); tick();
   } finally { rendering=false; }
@@ -264,13 +264,13 @@ ACT['install-dismiss']=()=>{meta.installSeen=2;persist();render(true);};
 /* sync + onboarding sheets */
 function syncHtml(){
   const create=F.mode==='create';
-  return `<h2>${create?'Create a family space':'Join with a code'}</h2><div class="lead">${create?'You’ll get a code. Share it and your PIN with family so they can join.':'Type the code and PIN you were given.'}</div>
+  return `<h2>${create?'Create a family space':'Join with a code'}</h2><div class="lead">${create?'You’ll get a code. Share it and your PIN with family so they can join.':(F.code?'Welcome back — just type the PIN.':'Type the code and PIN you were given.')}</div>
   <label class="f">Family code</label><input class="inp" id="scode" value="${esc(F.code||'')}" ${create?'readonly':''} placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off" style="font-weight:800;letter-spacing:.06em">
   <label class="f">${create?'Choose a PIN (4–8 digits)':'PIN'}</label><input class="inp" id="spin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
   ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:'<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>'}
   <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button><div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
 }
-ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():''};sheet(syncHtml());};
+ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():(meta.lastCode||'')};sheet(syncHtml());if(F.code&&el.dataset.v!=='create')setTimeout(()=>{const p=$('#spin');if(p)p.focus();},350);};
 ACT['sync-go']=async el=>{
   const code=($('#scode').value||'').trim().toUpperCase(), pin=($('#spin').value||'').trim(), err=$('#syncerr');
   if(code.replace(/-/g,'').length<8){err.textContent='That code looks too short.';return;}
@@ -281,7 +281,7 @@ ACT['sync-go']=async el=>{
   el.disabled=true;el.textContent='Connecting…';err.textContent='';
   const r=await A.joinSpace(code,pin,mode==='create',vp||undefined);
   if(!r.ok){el.disabled=false;el.textContent=mode==='create'?'Create & connect':'Join';err.textContent=r.msg+(r.msg.includes('Sync problem')?' Is the site deployed to Netlify with functions enabled?':'');return;}
-  meta.onboarded=true;persist();
+  meta.onboarded=true;meta.lastCode=code;persist();
   if(mode==='create'){setBody(`<div class="center" style="font-size:54px">🎉</div><h2 class="center">Family space ready</h2><p class="center lead">Share these on the other phone (Profile → Family sync → Join):</p><div class="card mt center"><div class="b" style="font-size:22px;letter-spacing:.08em">${esc(code)}</div><div class="mut sm mt">Her PIN (keep private)</div><div class="b" style="font-size:22px">${esc(pin)}</div>${vp?`<div class="mut sm mt">Family PIN (view-only — share this)</div><div class="b" style="font-size:22px">${esc(vp)}</div>`:''}</div><button class="btn primary block mt2" data-act="close">Done</button>`);}
   else{closeSheet();toast('Connected ✔');}
   render(true);
@@ -328,7 +328,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -362,7 +362,10 @@ function boot(){
   window.addEventListener('appinstalled',()=>{meta.installSeen=2;persist();});
   render();
   if(!meta.onboarded){F={step:'ob1',role:meta.role||'patient'};sheet(obHtml());}
-  const qa=new URLSearchParams(location.search).get('add'); if(qa&&forms[qa]&&meta.onboarded) openAdd(qa);
+  const sp=new URLSearchParams(location.search), sc=(sp.get('s')||'').toUpperCase();
+  if(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(sc)&&!meta.code){meta.lastCode=sc;persist();if(meta.onboarded)setTimeout(()=>ACT['open-sync']({dataset:{v:'join'}}),300);}
+  if(sp.get('sos')==='1'&&meta.onboarded&&meta.code&&!meta.ro&&meta.role!=='carer')setTimeout(()=>ACT.sos(),400);
+  const qa=sp.get('add'); if(qa&&forms[qa]&&meta.onboarded) openAdd(qa);
   if(meta.code) A.doSync();
   setInterval(tick,1000);
   setInterval(()=>A.checkReminders(fireReminder),20000); A.checkReminders(fireReminder);
@@ -384,4 +387,37 @@ function ensureMember(){if(!meta.code||!meta.me)return;const nm=meta.who||(meta.
 A.sync.listeners.push(()=>{try{ensureMember()}catch(e){}});
 // poll faster while the chat is open
 setInterval(()=>{if(U.tab==='chat'&&document.visibilityState==='visible'&&meta.code)A.doSync();},5000);
+
+/* ---- SOS help button ---- */
+let sosT=null,sosPos=null;
+function askPos(cb){try{navigator.geolocation?navigator.geolocation.getCurrentPosition(p=>{sosPos={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy};cb&&cb(true);},()=>cb&&cb(false),{enableHighAccuracy:true,timeout:9000,maximumAge:30000}):cb&&cb(false);}catch(e){cb&&cb(false);}}
+ACT.sos=()=>{
+  if(!meta.code){toast('Connect the family space first (Profile → Family sync)');return;}
+  sosPos=null;let n=5;askPos();
+  sheet(`<div class="center" style="font-size:54px">🆘</div><h2 class="center">Sending help alert in <span id="sosn">5</span></h2><p class="center lead">Your family gets an alert with your location. Pressed by mistake?</p><button class="btn primary block mt2" data-act="sos-now">Send now</button><button class="btn ghost block mt" data-act="sos-cancel">Cancel — I’m OK</button><a class="btn soft block mt" href="tel:10177">📞 Call ambulance 10177</a>`);
+  clearInterval(sosT);sosT=setInterval(()=>{const el=$('#sosn');if(!el){clearInterval(sosT);return;}n--;if(n<=0){clearInterval(sosT);sosSend();}else el.textContent=n;},1000);};
+ACT['sos-cancel']=()=>{clearInterval(sosT);closeSheet();toast('Cancelled');};
+ACT['sos-now']=()=>{clearInterval(sosT);sosSend();};
+async function sosSend(){
+  const p=sosPos,rec=put({type:'sos',status:'open',lat:p?+p.lat.toFixed(6):undefined,lng:p?+p.lng.toFixed(6):undefined,acc:p?Math.round(p.acc):undefined});
+  meta.sosSeen=rec.id;persist();A.doSync();
+  setBody(`<div class="center" style="font-size:54px">🆘</div><h2 class="center">Sending…</h2>`);
+  let msg='',ok=false;
+  try{const r=await fetch('/api/sos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,lat:p?p.lat:undefined,lng:p?p.lng:undefined,acc:p?p.acc:undefined})});const j=await r.json();
+    if(j.ok&&j.sent>0){ok=true;msg=`Alert emailed to ${j.sent} ${j.sent===1?'person':'people'}${p?' with your location':' (location was not available)'}. They can also see it in the app.`;}
+    else if(j.reason==='rate_limited'){ok=true;msg='Your family was alerted a moment ago.';}
+    else if(j.reason==='no_recipients'){msg='No family emails are set up yet, so no email went out. Call someone now.';}
+    else msg='The email did not go out. Call someone now.';
+  }catch(e){msg='No connection — the alert will reach the app when you are back online. Call someone now.';}
+  setBody(`<div class="center" style="font-size:54px">${ok?'✅':'⚠️'}</div><h2 class="center">${ok?'Help is on the way':'Call for help'}</h2><p class="center lead">${msg}</p><a class="btn primary block mt2" href="tel:10177">📞 Call ambulance 10177</a><a class="btn soft block mt" href="tel:112">📞 Call 112</a><button class="btn ghost block mt" data-act="close">Close</button>`);
+  render(true);}
+ACT['sos-ok']=()=>{const s=list('sos')[0];if(!s)return;put({...s,status:'ok'});if(meta.me)put({type:'msg',room:'g',text:'✅ I’m OK now — thank you.'});render(true);toast('Marked as OK ✅');};
+ACT['sos-way']=()=>{if(meta.me)put({type:'msg',room:'g',text:'🚗 '+(meta.who||'Family')+' is on the way'});toast('Everyone can see you’re on the way');};
+ACT['sos-test']=()=>{toast('Asking for location…');askPos(ok=>toast(ok?'📍 Location works — help button is ready':'Location is blocked. Allow it for this site in your browser/phone settings.'));};
+ACT.invite=async()=>{const url=location.origin+'/?s='+encodeURIComponent(meta.code),txt='Join our Steady family space. Open this link and type the family PIN: '+url;
+  try{if(navigator.share){await navigator.share({title:'Steady',text:txt,url});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  try{await navigator.clipboard.writeText(url);toast('Invite link copied 🔗 (no PIN inside)');}catch(e){prompt('Copy this link',url);}};
+const _od=A.onData;A.onData=()=>{_od();checkSOS();};
+function checkSOS(){const s=list('sos')[0];if(!s||s.status!=='open'||now()-s.ts>3*HOUR||meta.sosSeen===s.id)return;meta.sosSeen=s.id;persist();
+  if(meta.ro||meta.role==='carer'){notify('🆘 '+(cfg().name||'She')+' needs help','Open Steady — call her now','sos');try{navigator.vibrate&&navigator.vibrate([300,150,300,150,300,150,300])}catch(e){}toast('🆘 Help alert — check the top of the screen');}}
 })();
