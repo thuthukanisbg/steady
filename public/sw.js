@@ -1,5 +1,5 @@
 /* Steady service worker: offline shell + notification tap handling. Bump VERSION on each release. */
-const VERSION = 'steady-v9';
+const VERSION = 'steady-v10';
 const SHELL = ['/', '/index.html', '/styles.css', '/data.js', '/core.js', '/ui.js', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

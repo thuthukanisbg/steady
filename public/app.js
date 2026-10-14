@@ -270,7 +270,7 @@ function syncHtml(){
   ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:`<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>
   <div class="card mt"><div class="b sm">🙋 Family only — who are you?</div><div class="xs mut">Your name and <b>your own PIN</b> make you the same person on every phone and browser, so your chats and posts follow you. First time? Pick any name and a PIN only you know. Skip this if you are her.</div>
   <input class="inp mt" id="swho" value="${esc(meta.lastWho||meta.who||'')}" placeholder="Your name, e.g. Thembeka" autocomplete="name"><input class="inp mt" id="sppin" inputmode="numeric" maxlength="8" placeholder="Your own PIN (4–8 digits)" autocomplete="off"></div>`}
-  <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button><div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
+  <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button>${create?'':`<button class="linkish block mt center" data-act="forgot">Forgot a PIN? Reset by email</button>`}<div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
 }
 ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():(meta.lastCode||'')};sheet(syncHtml());if(F.code&&el.dataset.v!=='create')setTimeout(()=>{const p=$('#spin');if(p)p.focus();},350);};
 ACT['sync-go']=async el=>{
@@ -332,7 +332,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -441,4 +441,28 @@ ACT['push-on']=async()=>{
   if(p!=='granted'){toast('Alerts are blocked — allow notifications for Steady in settings');render(true);return;}
   const ok=await A.pushSync();render(true);toast(ok?'🔔 Alerts are on — even when the app is closed':'Couldn’t turn alerts on — try again');};
 A.sync.listeners.push(()=>{if(meta.code&&!meta.pushSynced&&A.sync.state==='on'){meta.pushSynced=1;if(pushOK()&&Notification.permission==='granted')A.pushSync();}});
+
+/* ---- forgot PIN by email ---- */
+function resetHtml(){const R=F.rs,fam=R.kind==='family';
+  if(R.step==='done') return `<div class="center" style="font-size:54px">✅</div><h2 class="center">PIN changed</h2><p class="center lead">Now log in with your new PIN.</p><button class="btn primary block mt2" data-act="open-sync" data-v="join">Log in</button>`;
+  const head=`<h2>Forgot a PIN?</h2><div class="seg"><button class="${!fam?'on':''}" data-act="rs-kind" data-v="owner">I’m her</button><button class="${fam?'on':''}" data-act="rs-kind" data-v="family">I’m family</button></div><label class="f">Family code</label><input class="inp" id="rcodeid" value="${esc(R.code||'')}" placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off" style="font-weight:800;letter-spacing:.06em">${fam?`<label class="f">Your name (as you joined)</label><input class="inp" id="rname" value="${esc(R.name||'')}" placeholder="e.g. Thembeka">`:''}`;
+  if(R.step==='ask') return head+`<div class="disc">${fam?'We email a code to the email saved for your name (or to her email if none). Then you choose a new personal PIN.':'We email a code to <b>her email</b> (set in Profile → Notifications). Then she chooses a new main PIN. Everyone else will need to log in again.'}</div><button class="btn primary block mt2" data-act="rs-send">Email me a code</button><div id="rserr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
+  return head+`<div class="banner good mt"><div class="sm">If an email is set up, a 6-digit code is on its way (valid 15 minutes). Check spam too.</div></div><label class="f">6-digit code</label><input class="inp" id="rcode6" inputmode="numeric" maxlength="6" autocomplete="one-time-code"><label class="f">${fam?'New personal PIN':'New main PIN'} (4–8 digits)</label><input class="inp" id="rnew" inputmode="numeric" maxlength="8" autocomplete="off"><button class="btn primary block mt2" data-act="rs-confirm">Set new PIN</button><div id="rserr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;}
+const rsRead=()=>{const R=F.rs;R.code=(($('#rcodeid')||{}).value||R.code||'').trim().toUpperCase();if($('#rname'))R.name=$('#rname').value.trim();return R;};
+ACT.forgot=()=>{F={step:'reset',rs:{step:'ask',kind:meta.lastWho?'family':'owner',code:meta.lastCode||'',name:meta.lastWho||''}};sheet(resetHtml());};
+ACT['rs-kind']=el=>{const R=rsRead();R.kind=el.dataset.v;setBody(resetHtml());};
+ACT['rs-send']=async el=>{const R=rsRead(),err=$('#rserr');
+  if(R.code.replace(/-/g,'').length<8){err.textContent='Enter the family code.';return;}
+  if(R.kind==='family'&&!R.name){err.textContent='Enter your name.';return;}
+  el.disabled=true;el.textContent='Sending…';
+  try{await fetch('/api/reset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'request',code:R.code,kind:R.kind,name:R.name})});R.step='code';setBody(resetHtml());}
+  catch(e){el.disabled=false;el.textContent='Email me a code';err.textContent='No connection. Try again.';}};
+ACT['rs-confirm']=async el=>{const R=rsRead(),err=$('#rserr'),c=($('#rcode6').value||'').trim(),n=($('#rnew').value||'').trim();
+  if(!/^\d{6}$/.test(c)){err.textContent='Enter the 6-digit code from the email.';return;}
+  if(!/^\d{4,8}$/.test(n)){err.textContent='New PIN must be 4–8 digits.';return;}
+  el.disabled=true;el.textContent='Saving…';
+  try{const r=await fetch('/api/reset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'confirm',code:R.code,kind:R.kind,name:R.name,rcode:c,newPin:n})});const j=await r.json();
+    if(j.ok){meta.lastCode=R.code;if(R.kind==='family')meta.lastWho=R.name;persist();R.step='done';setBody(resetHtml());}
+    else{el.disabled=false;el.textContent='Set new PIN';err.textContent=j.error==='same_pin'?'Her PIN must differ from the family PIN.':'That code is wrong or has expired. Request a new one.';}
+  }catch(e){el.disabled=false;el.textContent='Set new PIN';err.textContent='No connection. Try again.';}};
 })();
