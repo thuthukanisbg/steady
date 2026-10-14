@@ -1,6 +1,7 @@
 // POST /api/notify — emails the family when a reading is low / very low / very high.
 // Recipients are read from the *synced settings* (never from the request) so this can't be used as an open mail relay.
 import { json, store, spaceKey, stateKey, pinHash, validCreds, status, LABEL, fmt, sast, sendMail, siteUrl, escHtml, recipients } from './_lib/common.mjs';
+import { pushSpace } from './_lib/push.mjs';
 
 const TIPS = {
   'crit-low': 'Give 15–20 g fast sugar (½ cup juice / regular cooldrink / 3–4 glucose tablets) and recheck in 15 minutes. If drowsy, confused or unresponsive call 10177 / 112 — nothing in the mouth, recovery position.',
@@ -25,14 +26,12 @@ export default async (req) => {
   if (s.email_alerts === false) return done({ ok: true, sent: 0, reason: 'alerts_off' });
   const level = status(v, s);
   if (level === 'ok' || level === 'high') return done({ ok: true, sent: 0, reason: 'not_alert_worthy' });
-  const to = recipients(doc).map(x => x.email);
-  if (!to.length) return done({ ok: true, sent: 0, reason: 'no_recipients' });
-
   // rate limit: one email per level per 30 minutes
   const sk = stateKey(key), state = (await st.get(sk, { type: 'json' })) || {};
   const last = state.alert?.[level] || 0;
   if (Date.now() - last < 30 * 60e3) return done({ ok: true, sent: 0, reason: 'rate_limited' });
 
+  const to = recipients(doc).map(x => x.email);
   const name = s.name || 'She';
   const when = sast(typeof ts === 'number' ? ts : Date.now());
   const subject = `${level.includes('crit') ? '🚨' : '⚠️'} ${name}'s sugar is ${LABEL[level]} (${v.toFixed(1)})`;
@@ -46,9 +45,10 @@ export default async (req) => {
     <p style="color:#888;font-size:12px">General guidance only — follow her doctor's plan. Emergency: 10177 / 112.</p></div>`;
   const text = `${name}'s sugar is ${LABEL[level]}: ${fmt(v)}.\n${TIPS[level]}\nEmergency: 10177 / 112.`;
 
-  const r = await sendMail({ to, subject, html, text });
-  if (r.ok) { state.alert = { ...(state.alert || {}), [level]: Date.now() }; await st.setJSON(sk, state); }
-  return done({ ok: r.ok, sent: r.ok ? to.length : 0, reason: r.reason });
+  const pushed = await pushSpace(key, { title: subject, body: `${fmt(v)} — ${TIPS[level].slice(0, 90)}`, tag: 'alert-' + level, url: '/' }, ['viewer']).catch(() => ({ sent: 0 }));
+  const r = to.length ? await sendMail({ to, subject, html, text }) : { ok: false, reason: 'no_recipients' };
+  if (r.ok || pushed.sent) { state.alert = { ...(state.alert || {}), [level]: Date.now() }; await st.setJSON(sk, state); }
+  return done({ ok: r.ok || pushed.sent > 0, sent: r.ok ? to.length : 0, pushed: pushed.sent, reason: r.reason });
 };
 
 export const config = { path: '/api/notify' };

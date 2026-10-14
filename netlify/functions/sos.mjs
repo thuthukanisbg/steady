@@ -1,6 +1,7 @@
 // POST /api/sos — her HELP button. Emails the family at once with a map link (if she allowed location) and a call link.
 // Only her PIN can trigger it; recipients come from the synced settings (never from the request).
 import { json, store, spaceKey, stateKey, pinHash, validCreds, sast, sendMail, siteUrl, escHtml, recipients } from './_lib/common.mjs';
+import { pushSpace } from './_lib/push.mjs';
 
 const done = (o, st) => { console.log('sos', JSON.stringify({ ok: o.ok, sent: o.sent, error: o.error, reason: o.reason })); return json(o, st); };
 
@@ -14,11 +15,13 @@ export default async (req) => {
   if (!doc) return done({ error: 'not_found' }, 404);
   if (doc.pin !== await pinHash(code, pin)) return done({ error: 'wrong_pin' }, 401);   // owner only
 
-  const to = recipients(doc).map(x => x.email);
-  if (!to.length) return done({ ok: true, sent: 0, reason: 'no_recipients' });
   // one alert per minute, but never block a genuine repeat press for long
   const sk = stateKey(key), state = (await st.get(sk, { type: 'json' })) || {};
   if (Date.now() - (state.sos || 0) < 60e3) return done({ ok: true, sent: 0, reason: 'rate_limited' });
+  const pnm = doc.recs?.settings?.name || 'She';
+  const pr = await pushSpace(key, { title: `🆘 ${pnm} needs help`, body: 'Open Steady — call her now', tag: 'sos', url: '/' }, ['viewer']).catch(() => ({ sent: 0 }));
+  const to = recipients(doc).map(x => x.email);
+  if (!to.length) { if (pr.sent) { state.sos = Date.now(); await st.setJSON(sk, state); } return done({ ok: pr.sent > 0, sent: 0, pushed: pr.sent, reason: pr.sent ? 'push_only' : 'no_recipients' }); }
 
   const s = doc.recs?.settings || {}, name = s.name || 'She';
   const hasPos = typeof lat === 'number' && typeof lng === 'number' && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
@@ -37,8 +40,8 @@ export default async (req) => {
     <p style="color:#888;font-size:12px">Sent by Steady because she pressed her help button. Emergency: 10177 / 112.</p></div>`;
   const text = `🆘 ${name} pressed the HELP button at ${t}.${phone ? '\nCall: ' + phone : ''}${map ? '\nLocation: ' + map : ''}\nIf you cannot reach her, go to her or call 10177 / 112.`;
   const r = await sendMail({ to, subject: `🆘 ${name} needs help — please call her now`, html, text });
-  if (r.ok) { state.sos = Date.now(); await st.setJSON(sk, state); }
-  return done({ ok: r.ok, sent: r.ok ? to.length : 0, reason: r.reason });
+  if (r.ok || pr.sent) { state.sos = Date.now(); await st.setJSON(sk, state); }
+  return done({ ok: r.ok || pr.sent > 0, sent: r.ok ? to.length : 0, pushed: pr.sent, reason: r.reason });
 };
 
 export const config = { path: '/api/sos' };

@@ -328,7 +328,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -420,4 +420,21 @@ ACT.invite=async()=>{const url=location.origin+'/?s='+encodeURIComponent(meta.co
 const _od=A.onData;A.onData=()=>{_od();checkSOS();};
 function checkSOS(){const s=list('sos')[0];if(!s||s.status!=='open'||now()-s.ts>3*HOUR||meta.sosSeen===s.id)return;meta.sosSeen=s.id;persist();
   if(meta.ro||meta.role==='carer'){notify('🆘 '+(cfg().name||'She')+' needs help','Open Steady — call her now','sos');try{navigator.vibrate&&navigator.vibrate([300,150,300,150,300,150,300])}catch(e){}toast('🆘 Help alert — check the top of the screen');}}
+
+/* ---- Web Push (alerts when the app is closed) ---- */
+const b64u2buf=s=>{s=s.replace(/-/g,'+').replace(/_/g,'/');const r=atob(s+'='.repeat((4-s.length%4)%4));return Uint8Array.from(r,c=>c.charCodeAt(0));};
+const pushOK=()=>('serviceWorker' in navigator)&&('PushManager' in window)&&('Notification' in window);
+A.pushSync=async function(){
+  if(!meta.code||!pushOK()||Notification.permission!=='granted')return false;
+  try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
+    if(!sub){const k=(await (await fetch('/api/push?key')).json()).key;sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u2buf(k)});}
+    const r=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,sub:sub.toJSON()})});
+    const ok=r.ok;meta.pushOn=ok;persist();return ok;}catch(e){return false;}};
+ACT['push-on']=async()=>{
+  if(!meta.code){toast('Connect the family space first');return;}
+  if(!pushOK()){toast(/iphone|ipad/i.test(navigator.userAgent)?'On iPhone: tap Share → Add to Home Screen, open Steady from there, then try again':'This browser can’t do background alerts');return;}
+  const p=await Notification.requestPermission();
+  if(p!=='granted'){toast('Alerts are blocked — allow notifications for Steady in settings');render(true);return;}
+  const ok=await A.pushSync();render(true);toast(ok?'🔔 Alerts are on — even when the app is closed':'Couldn’t turn alerts on — try again');};
+A.sync.listeners.push(()=>{if(meta.code&&!meta.pushSynced&&A.sync.state==='on'){meta.pushSynced=1;if(pushOK()&&Notification.permission==='granted')A.pushSync();}});
 })();

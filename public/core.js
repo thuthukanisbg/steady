@@ -385,7 +385,7 @@ A.joinSpace=async function(code,pin,create,vpin){
 A.leaveSpace=function(){
   // a view-only phone keeps no copy of her data once it is logged out
   if(meta.ro){ Object.keys(recs).forEach(k=>delete recs[k]); meta.pending={}; }
-  meta.lastCode=meta.code||meta.lastCode||'';meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
+  meta.lastCode=meta.code||meta.lastCode||'';meta.pushOn=false;meta.pushSynced=0;meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
 A.genCode=function(){const al='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(12);crypto.getRandomValues(b);const s=[...b].map(x=>al[x%al.length]).join('');return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12);};
 A.notifyServer=function(rec){
   if(!meta.code||!cfg().email_alerts) return;
