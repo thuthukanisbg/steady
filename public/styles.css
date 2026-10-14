@@ -240,3 +240,18 @@ button.card{font:inherit;color:inherit}
 .rx b{font-size:12px;font-weight:700;color:var(--mut)}
 .rx.on{background:color-mix(in srgb,var(--brand2) 22%,transparent);border-color:var(--brand2)}
 .note.post{border-left:5px solid var(--coral)}
+
+.bdg{display:inline-block;min-width:18px;padding:1px 6px;border-radius:99px;background:var(--bad,#d64545);color:#fff;font-size:11px;font-weight:800;text-align:center;margin-left:4px}
+.chatrow{width:100%;text-align:left;background:none;border:0;cursor:pointer}
+.chathead{display:flex;align-items:center;gap:10px;padding:4px 0 10px}
+.msgs{display:flex;flex-direction:column;gap:8px;max-height:calc(100dvh - 300px);min-height:240px;overflow-y:auto;padding:4px 2px}
+.bub{max-width:82%;padding:8px 12px;border-radius:16px;font-size:15px;line-height:1.35;word-wrap:break-word}
+.bub.me{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
+.bub.them{align-self:flex-start;background:var(--card,#fff);border:1px solid var(--line,#e5e5e5);border-bottom-left-radius:4px}
+.bub .bn{font-size:11px;font-weight:800;opacity:.7;margin-bottom:2px}
+.bub .bt{white-space:pre-wrap}
+.bub .bm{font-size:10px;opacity:.65;text-align:right;margin-top:2px}
+.bub .x{color:inherit;opacity:.7}
+.chatbar{display:flex;gap:8px;align-items:flex-end;position:sticky;bottom:calc(84px + var(--safe-b,0px));padding-top:8px}
+.chatbar .ta{flex:1;min-height:42px;margin:0}
+.nav button.n .bdg{position:absolute;margin:-30px 0 0 22px;font-size:10px;padding:0 5px}

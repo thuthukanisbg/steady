@@ -71,7 +71,7 @@ function saveSettings(patch){
 Object.assign(A,{cfg,saveSettings,DEF});
 
 /* ---------- records ---------- */
-const RO_OK=['note','follower','post','react'];
+const RO_OK=['note','follower','post','react','msg','member'];
 if(!meta.dev){const b=new Uint8Array(12);crypto.getRandomValues(b);meta.dev=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');LS.set('meta',meta);}
 function put(r){
   if(meta.ro&&!RO_OK.includes(r.type)){ if(A.toast) A.toast('View-only — family can look but not edit'); return r; }

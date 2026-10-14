@@ -14,25 +14,28 @@ function sheet(html){const s=$('#sheet');s.innerHTML=`<div class="scrim" data-ac
 function setBody(html){$('#sheet .panel').innerHTML='<div class="grab"></div>'+html;}
 function closeSheet(){const s=$('#sheet');s.classList.remove('open');s.innerHTML='';document.body.style.overflow='';F={};if(pendingRender){pendingRender=false;softRender();}}
 function renderNav(){
-  const it=meta.ro?[['home','🏠','Home'],['food','🥗','Food'],['progress','📊','Progress'],['care','💞','Care']]:[['home','🏠','Home'],['food','🥗','Food'],null,['progress','📊','Progress'],['care','💞','Care']];
+  const un=U.unread?U.unread():0, ch=['chat','💬','Chat'+(un?' <b class="bdg">'+(un>9?'9+':un)+'</b>':'')];
+  const it=meta.ro?[['home','🏠','Home'],['food','🥗','Food'],['progress','📊','Progress'],['care','💞','Care'],ch]:[['home','🏠','Home'],['food','🥗','Food'],null,['progress','📊','Progress'],['care','💞','Care'],ch];
+  $('#nav').style.gridTemplateColumns=it.map(i=>i?'1fr':'72px').join(' ');
   $('#nav').innerHTML=it.map(i=>i?`<button class="n ${U.tab===i[0]?'on':''}" data-act="go" data-v="${i[0]}"><span class="i">${i[1]}</span>${i[2]}</button>`:`<button class="fab" data-act="add" data-v="glucose" aria-label="Add entry">＋</button>`).join('');
 }
 let rendering=false;
 function render(quiet){
   if(rendering) return; rendering=true;
   try{
-    const fn={home:U.pageHome,food:U.pageFood,progress:U.pageProgress,care:U.pageCare,me:U.pageMe}[U.tab];
+    const fn={home:U.pageHome,food:U.pageFood,progress:U.pageProgress,care:U.pageCare,chat:U.pageChat,me:U.pageMe}[U.tab];
     const html=`<div class="page${quiet?' noanim':''}">${fn()}</div>`;
     const ae=document.activeElement; if(ae&&ae!==document.body&&$('#view').contains(ae)){try{ae.blur()}catch(e){}}
     $('#view').innerHTML=html; renderNav(); tick();
   } finally { rendering=false; }
 }
 function softRender(){
+  if(U.tab==='chat'&&U.room&&$('#msgs')){U.chatRefresh();renderNav();return;}
   const ae=document.activeElement, typing=ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName);
   if($('#sheet').classList.contains('open')||typing){pendingRender=true;return;}
   const y=window.scrollY; render(true); window.scrollTo(0,y);
 }
-function go(tab){U.tab=tab;render();window.scrollTo(0,0);}
+function go(tab){U.tab=tab;if(tab!=='chat')U.room=null;render();window.scrollTo(0,0);}
 function withBadges(fn){
   const before=new Set(A.game().badges.filter(b=>b.got).map(b=>b.id)); const r=fn();
   const nb=A.game().badges.filter(b=>b.got&&!before.has(b.id)); if(nb.length) setTimeout(()=>toast('🏅 New badge: '+nb[0].n+'!'),500); return r;
@@ -325,7 +328,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -367,3 +370,18 @@ function boot(){
 }
 boot();
 })();
+
+/* ---- chat ---- */
+ACT['chat-open']=el=>{U.room=el.dataset.v;U.markSeen(U.room);render();U.chatScroll();};
+ACT['chat-back']=()=>{U.room=null;render();};
+ACT['chat-send']=()=>{const t=$('#chatin'),v=(t.value||'').trim();if(!v)return;
+  const r=U.room;if(r==='g')put({type:'msg',room:'g',text:v.slice(0,1000)});else put({type:'msg',room:'d',to:r,text:v.slice(0,1000)});
+  t.value='';U.markSeen(r);U.chatRefresh();t.focus();};
+ACT['msg-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this message?','Delete',()=>{A.del(id);U.chatRefresh();});};
+document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='chatin'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();ACT['chat-send']();}});
+// keep my name on the member list so others can message me privately
+function ensureMember(){if(!meta.code||!meta.me)return;const nm=meta.who||(meta.role==='carer'?'Family':(cfg().name||'Her')),id='mb_'+meta.me,cur=A.recs()[id];
+  const role=meta.ro?'family':'her';if(!cur||cur.del||cur.by!==nm||cur.name!==nm||cur.role!==role)put({id,type:'member',name:nm,role,by:nm});}
+A.sync.listeners.push(()=>{try{ensureMember()}catch(e){}});
+// poll faster while the chat is open
+setInterval(()=>{if(U.tab==='chat'&&document.visibilityState==='visible'&&meta.code)A.doSync();},5000);

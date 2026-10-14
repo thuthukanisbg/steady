@@ -1,6 +1,6 @@
 // POST /api/sync — merge-based sync of one family "space" (all records in a single JSON doc).
 // Each record: { id, type, ts, u (updated ms), del?, ...fields }. Newest `u` wins; deletes are tombstones.
-import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, sha } from './_lib/common.mjs';
+import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, MAX_MSGS, sha } from './_lib/common.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -45,6 +45,12 @@ export default async (req) => {
       if (JSON.stringify(r).length > (r.type === 'post' ? 150000 : 6000)) continue;
       if (r.type === 'post' && !r.del && !(typeof r.img === 'string' && r.img.startsWith('data:image/jpeg;base64,') && r.img.length < 140000)) continue;
       if (r.type === 'react' && !r.del && (!REACTIONS.includes(r.e) || typeof r.t !== 'string' || r.t.length > 40)) continue;
+      if (r.type === 'msg' && !r.del) {
+        if (!me || typeof r.text !== 'string' || !r.text.trim() || r.text.length > 1000) continue;
+        if (r.room === 'd') { if (typeof r.to !== 'string' || !/^[a-f0-9]{16}$/.test(r.to) || r.to === me) continue; }
+        else if (r.room !== 'g') continue; else delete r.to;
+      }
+      if (r.type === 'member' && !r.del && (!me || r.id !== 'mb_' + me || typeof r.name !== 'string' || r.name.length > 40)) continue;
       const ex = doc.recs[r.id];
       if (role === 'viewer') {                       // view-only: family can add notes, photos, reactions and their own email follow
         if (!FAMILY_WRITE.has(r.type) || (ex && ex.type !== r.type)) continue;
@@ -59,11 +65,16 @@ export default async (req) => {
     const withImg = Object.values(doc.recs).filter(x => x.type === 'post' && !x.del && x.img).sort((a, b) => b.ts - a.ts);
     for (const x of withImg.slice(MAX_PHOTOS)) { doc.recs[x.id] = { ...x, img: '', pruned: 1, u: Date.now(), s: ++doc.seq }; changed = true; }
 
+    // chat history is bounded too: oldest messages beyond the cap are dropped
+    const msgs = Object.values(doc.recs).filter(x => x.type === 'msg' && !x.del).sort((a, b) => b.ts - a.ts);
+    for (const x of msgs.slice(MAX_MSGS)) { doc.recs[x.id] = { id: x.id, type: 'msg', del: 1, ts: x.ts, u: Date.now(), s: ++doc.seq }; changed = true; }
+
     if (changed || !cur) {
       const res = await st.setJSON(key, doc, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
       if (res && res.modified === false) continue; // someone else wrote first — retry on fresh data
     }
-    const out = Object.values(doc.recs).filter(r => r.s > since);
+    // private 1:1 messages are only ever sent to the two people in them (owner included — no one else can read them)
+    const out = Object.values(doc.recs).filter(r => r.s > since && !(r.type === 'msg' && r.room === 'd' && !r.del && r.a !== me && r.to !== me));
     return json({ ok: true, seq: doc.seq, records: out, now: Date.now(), role, hasFamilyPin: !!doc.vpin, epoch: doc.epoch, me });
   }
   return json({ error: 'busy' }, 409);

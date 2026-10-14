@@ -60,9 +60,10 @@ export const validEmail = e => typeof e === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s
 
 /* ---- roles: owner PIN (full access) vs family PIN (view-only) ---- */
 export function roleOf(doc, ph) { return doc.pin === ph ? 'owner' : (doc.vpin && doc.vpin === ph ? 'viewer' : null); }
-export const FAMILY_WRITE = new Set(['note', 'follower', 'post', 'react']);   // the only things view-only family may add/remove
+export const FAMILY_WRITE = new Set(['note', 'follower', 'post', 'react', 'msg', 'member']);   // the only things view-only family may add/remove
 export const REACTIONS = ['❤️', '👏', '💪', '🙏', '😊'];
 export const MAX_PHOTOS = 20;
+export const MAX_MSGS = 600;
 /* everyone who gets alert + morning emails: legacy settings.carers plus named follower records */
 export function recipients(doc) {
   const s = doc?.recs?.settings || {}, seen = new Set(), out = [];

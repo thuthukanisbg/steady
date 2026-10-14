@@ -291,5 +291,36 @@ function pageMe(){
   h+=`<p class="disc center">Steady is a logging and coaching aid — not a medical device and not a substitute for professional care. In an emergency call 10177 / 112.</p>`;
   return h+'</div>';
 }
-Object.assign(U,{pageHome,pageFood,pageProgress,pageCare,pageMe,top,planHtml,treatsHtml});
+
+/* ---------------- CHAT ---------------- */
+const mine=m=>!!meta.me&&m.a===meta.me;
+const partner=m=>mine(m)?m.to:m.a;
+const roomOf=m=>m.room==='g'?'g':partner(m);
+function msgs(room){return list('msg').filter(m=>room==='g'?m.room==='g':(m.room==='d'&&(mine(m)?m.to===room:(m.a===room&&m.to===meta.me)))).sort((a,b)=>a.ts-b.ts);}
+function unreadIn(room){const seen=(meta.seen||{})[room]||0;return msgs(room).filter(m=>!mine(m)&&m.ts>seen).length;}
+function members(){const seen={};return list('member').filter(m=>m.id!=='mb_'+meta.me&&!seen[m.id]&&(seen[m.id]=1)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));}
+U.unread=()=>{if(!meta.code||!meta.me)return 0;let n=unreadIn('g');members().forEach(m=>{n+=unreadIn(m.id.slice(3));});return n;};
+U.markSeen=room=>{meta.seen=meta.seen||{};const l=msgs(room);meta.seen[room]=l.length?l[l.length-1].ts:now();A.persist();};
+function bubble(m){const me=mine(m),del=me?`<button class="x" data-act="msg-del" data-id="${m.id}" aria-label="Delete message">✕</button>`:'';
+  return `<div class="bub ${me?'me':'them'}">${me?'':`<div class="bn">${esc(m.by||'')}</div>`}<div class="bt">${esc(m.text)}</div><div class="bm">${hhmm(m.ts)} ${del}</div></div>`;}
+function msgsHtml(){const l=msgs(U.room);return l.length?l.map(bubble).join(''):`<div class="empty"><div class="e">💬</div>No messages yet — say hi!</div>`;}
+U.chatRefresh=()=>{const el=document.getElementById('msgs');if(!el)return;const atEnd=el.scrollHeight-el.scrollTop-el.clientHeight<80;el.innerHTML=msgsHtml();U.markSeen(U.room);if(atEnd)el.scrollTop=el.scrollHeight;};
+U.chatScroll=()=>{const el=document.getElementById('msgs');if(el)el.scrollTop=el.scrollHeight;};
+function pageChat(){
+  if(!meta.code) return top('Chat','Talk with the family')+`<div class="banner info"><h3>🔗 Connect first</h3><div class="sm">Chat works inside the family space. Create or join it in <a class="linkish" data-act="go" data-v="me">Profile → Family sync</a>.</div></div>`;
+  if(!meta.me) return top('Chat','Talk with the family')+`<div class="empty"><div class="e">⏳</div>Connecting… one moment.</div>`;
+  if(U.room){
+    const dm=U.room!=='g',p=dm?list('member').find(m=>m.id==='mb_'+U.room):null,title=dm?(p?p.name:'Private chat'):'Family group';
+    setTimeout(U.chatScroll,0);
+    return `<div class="chathead"><button class="btn ghost sm" data-act="chat-back" aria-label="Back">‹ Back</button><div class="grow"><div class="b">${dm?'🔒 ':'👨‍👩‍👧 '}${esc(title)}</div><div class="xs mut">${dm?'Private — only you two can read this':'Everyone in the family space'}</div></div></div><div class="msgs" id="msgs">${msgsHtml()}</div><div class="chatbar"><textarea id="chatin" class="ta" rows="1" maxlength="1000" placeholder="Write a message…"></textarea><button class="btn primary" data-act="chat-send" aria-label="Send">Send</button></div>`;
+  }
+  const row=(room,ic,name,sub)=>{const l=msgs(room),last=l[l.length-1],un=unreadIn(room);
+    return `<button class="item chatrow" data-act="chat-open" data-v="${room}"><div class="ico">${ic}</div><div class="grow"><div class="t">${esc(name)}</div><div class="d">${last?esc((mine(last)?'You: ':'')+last.text).slice(0,60):esc(sub)}</div></div>${last?`<div class="xs mut">${ago(last.ts)}</div>`:''}${un?`<b class="bdg">${un}</b>`:''}</button>`;};
+  const ms=members();
+  let h=top('Chat','Talk with the family')+`<div class="stack"><div class="card"><h3>Group</h3>${row('g','👨‍👩‍👧','Family group','Everyone together')}</div><div class="card"><h3>Private chats 🔒</h3>`;
+  h+=ms.length?ms.map(m=>row(m.id.slice(3),m.role==='her'?'💛':'🙂',m.name||'Family',m.role==='her'?'Message her privately':'Message privately')).join(''):`<div class="empty" style="padding:12px"><div class="e">👋</div>People appear here once they’ve opened the app. Private chats can only be read by the two people in them.</div>`;
+  return h+`</div></div>`;
+}
+
+Object.assign(U,{pageChat,pageHome,pageFood,pageProgress,pageCare,pageMe,top,planHtml,treatsHtml});
 })();
