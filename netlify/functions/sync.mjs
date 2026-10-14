@@ -3,6 +3,9 @@
 import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, MAX_MSGS, sha, validEmail } from './_lib/common.mjs';
 import { pushSpace } from './_lib/push.mjs';
 
+// one-time clean slate for chat: on the first sync after this value changes, every existing message (group + private) is deleted
+const CHAT_RESET = '2026-10-14-clean-start';
+
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
@@ -20,7 +23,7 @@ export default async (req) => {
     let doc = cur ? cur.data : null;
     if (!doc) {
       if (!create) return json({ error: 'not_found' }, 404);
-      doc = { v: 1, pin: ph, vpin: null, seq: 0, epoch: 0, recs: {}, created: Date.now() };
+      doc = { v: 1, pin: ph, vpin: null, seq: 0, epoch: 0, recs: {}, created: Date.now(), chatReset: CHAT_RESET };
     }
     const role = roleOf(doc, ph);
     if (!role) return json({ error: 'wrong_pin' }, 401);
@@ -57,6 +60,10 @@ export default async (req) => {
       if (doc.vpin !== vh) { doc.vpin = vh; changed = true; if (cur) bump = true; }
     }
     if (bump) doc.epoch++;
+    if (doc.chatReset !== CHAT_RESET) {
+      for (const x of Object.values(doc.recs)) if (x.type === 'msg' && !x.del) doc.recs[x.id] = { id: x.id, type: 'msg', del: 1, ts: x.ts, u: Date.now(), s: ++doc.seq };
+      doc.chatReset = CHAT_RESET; changed = true;
+    }
     const newMsgs = [];
     let followers = Object.values(doc.recs).filter(x => x.type === 'follower' && !x.del).length;
     for (const r of (Array.isArray(records) ? records : []).slice(0, 600)) {
