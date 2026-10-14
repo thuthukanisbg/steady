@@ -344,9 +344,9 @@ A.doSync=async function(opts={}){
   const sentU={}; const out=[];
   Object.keys(meta.pending).forEach(id=>{ if(recs[id]){sentU[id]=recs[id].u; out.push(recs[id]);} else delete meta.pending[id]; });
   try{
-    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch})});
+    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined,join:!!opts.joining})});
     const j=await res.json().catch(()=>({}));
-    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
+    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.',need_identity:'Enter your name and your own PIN below (family only).',name_taken:'That name is already used with a different personal PIN. Enter your own PIN, or use another name.',too_many:'Too many people in this space.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
     let newCrit=[];
     (j.records||[]).forEach(r=>{
       const cur=recs[r.id];
@@ -367,25 +367,27 @@ A.doSync=async function(opts={}){
     setSync(offline?'offline':'err',e.message); return {ok:false,error:e};
   }
 };
-A.joinSpace=async function(code,pin,create,vpin){
+A.joinSpace=async function(code,pin,create,vpin,ident){
   // Joining an existing space adopts its shared settings; creating uploads everything on this phone.
   const bak=recs.settings, bakPending=meta.pending.settings;
   meta.code=code; meta.pin=pin; meta.seq=0; meta.epoch=undefined; meta.me='';
+  meta.ppin=ident&&ident.ppin||''; if(ident&&ident.who) meta.who=ident.who;
   if(!create){ delete recs.settings; delete meta.pending.settings; }
   Object.keys(recs).forEach(id=>meta.pending[id]=1);
   persist();
   const r=await A.doSync({create,vpin,joining:true});
   if(!r.ok){
-    const e=r.error; meta.code='';meta.pin='';
+    const e=r.error; meta.code='';meta.pin='';meta.ppin='';
     if(!create&&bak){ recs.settings=bak; if(bakPending) meta.pending.settings=1; }
     persist(); setSync('off'); return {ok:false,msg:(e&&e.message)||'Could not connect'};
   }
+  if(!meta.ro) meta.ppin=''; else meta.lastWho=meta.who; persist();
   return {ok:true};
 };
 A.leaveSpace=function(){
   // a view-only phone keeps no copy of her data once it is logged out
   if(meta.ro){ Object.keys(recs).forEach(k=>delete recs[k]); meta.pending={}; }
-  meta.lastCode=meta.code||meta.lastCode||'';meta.pushOn=false;meta.pushSynced=0;meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
+  meta.lastCode=meta.code||meta.lastCode||'';meta.pushOn=false;meta.pushSynced=0;meta.lastWho=meta.ro?meta.who:meta.lastWho;meta.ppin='';meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
 A.genCode=function(){const al='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(12);crypto.getRandomValues(b);const s=[...b].map(x=>al[x%al.length]).join('');return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12);};
 A.notifyServer=function(rec){
   if(!meta.code||!cfg().email_alerts) return;

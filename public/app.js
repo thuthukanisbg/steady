@@ -267,7 +267,9 @@ function syncHtml(){
   return `<h2>${create?'Create a family space':'Join with a code'}</h2><div class="lead">${create?'You’ll get a code. Share it and your PIN with family so they can join.':(F.code?'Welcome back — just type the PIN.':'Type the code and PIN you were given.')}</div>
   <label class="f">Family code</label><input class="inp" id="scode" value="${esc(F.code||'')}" ${create?'readonly':''} placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off" style="font-weight:800;letter-spacing:.06em">
   <label class="f">${create?'Choose a PIN (4–8 digits)':'PIN'}</label><input class="inp" id="spin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
-  ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:'<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>'}
+  ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:`<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>
+  <div class="card mt"><div class="b sm">🙋 Family only — who are you?</div><div class="xs mut">Your name and <b>your own PIN</b> make you the same person on every phone and browser, so your chats and posts follow you. First time? Pick any name and a PIN only you know. Skip this if you are her.</div>
+  <input class="inp mt" id="swho" value="${esc(meta.lastWho||meta.who||'')}" placeholder="Your name, e.g. Thembeka" autocomplete="name"><input class="inp mt" id="sppin" inputmode="numeric" maxlength="8" placeholder="Your own PIN (4–8 digits)" autocomplete="off"></div>`}
   <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button><div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
 }
 ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():(meta.lastCode||'')};sheet(syncHtml());if(F.code&&el.dataset.v!=='create')setTimeout(()=>{const p=$('#spin');if(p)p.focus();},350);};
@@ -279,7 +281,9 @@ ACT['sync-go']=async el=>{
   if(vp&&!/^\d{4,8}$/.test(vp)){err.textContent='Family PIN must be 4–8 digits.';return;}
   if(vp&&vp===pin){err.textContent='Family PIN must differ from her PIN.';return;}
   el.disabled=true;el.textContent='Connecting…';err.textContent='';
-  const r=await A.joinSpace(code,pin,mode==='create',vp||undefined);
+  const who=(($('#swho')||{}).value||'').trim(), pp=(($('#sppin')||{}).value||'').trim();
+  if(pp&&!/^\d{4,8}$/.test(pp)){el.disabled=false;el.textContent='Join';err.textContent='Your own PIN must be 4–8 digits.';return;}
+  const r=await A.joinSpace(code,pin,mode==='create',vp||undefined,who&&pp?{who,ppin:pp}:undefined);
   if(!r.ok){el.disabled=false;el.textContent=mode==='create'?'Create & connect':'Join';err.textContent=r.msg+(r.msg.includes('Sync problem')?' Is the site deployed to Netlify with functions enabled?':'');return;}
   meta.onboarded=true;meta.lastCode=code;persist();
   if(mode==='create'){setBody(`<div class="center" style="font-size:54px">🎉</div><h2 class="center">Family space ready</h2><p class="center lead">Share these on the other phone (Profile → Family sync → Join):</p><div class="card mt center"><div class="b" style="font-size:22px;letter-spacing:.08em">${esc(code)}</div><div class="mut sm mt">Her PIN (keep private)</div><div class="b" style="font-size:22px">${esc(pin)}</div>${vp?`<div class="mut sm mt">Family PIN (view-only — share this)</div><div class="b" style="font-size:22px">${esc(vp)}</div>`:''}</div><button class="btn primary block mt2" data-act="close">Done</button>`);}

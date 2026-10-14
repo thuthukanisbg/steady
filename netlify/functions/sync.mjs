@@ -5,14 +5,14 @@ import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACT
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
-  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch } = b || {};
+  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, who, ppin, join = false } = b || {};
   if (!validCreds(code, pin)) return json({ error: 'bad_credentials' }, 400);
   if (vpin !== undefined && vpin !== null && !/^\d{4,8}$/.test(String(vpin))) return json({ error: 'bad_family_pin' }, 400);
 
   if (newPin !== undefined && newPin !== null && !/^\d{4,8}$/.test(String(newPin))) return json({ error: 'bad_pin' }, 400);
   const st = store(), key = await spaceKey(code), ph = await pinHash(code, pin);
   // per-device author id (hash of a secret kept on the device) so people can delete only their own posts
-  const me = typeof dev === 'string' && /^[a-f0-9]{16,64}$/.test(dev) ? (await sha('d:' + code + ':' + dev)).slice(0, 16) : null;
+  let me = typeof dev === 'string' && /^[a-f0-9]{16,64}$/.test(dev) ? (await sha('d:' + code + ':' + dev)).slice(0, 16) : null;
 
   for (let attempt = 0; attempt < 4; attempt++) {
     const cur = await st.getWithMetadata(key, { type: 'json' }); // null when missing
@@ -28,6 +28,17 @@ export default async (req) => {
     if (typeof epoch === 'number' && epoch !== doc.epoch) return json({ error: 'session_expired' }, 401);
 
     let changed = false, bump = false;
+    // WHO is posting: her = one fixed identity on every device; family = their name + own PIN, so the same person on any phone/browser
+    if (role === 'owner') me = (await sha('o:' + code)).slice(0, 16);
+    else if (typeof who === 'string' && who.trim()) {
+      const nk = who.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40);
+      if (!/^\d{4,8}$/.test(String(ppin || ''))) return json({ error: 'need_identity' }, 400);
+      doc.people = doc.people || {};
+      const h = await sha('q:' + code + ':' + nk + ':' + ppin), px = doc.people[nk];
+      if (px && px.h !== h) return json({ error: 'name_taken' }, 403);
+      if (!px) { if (Object.keys(doc.people).length >= 30) return json({ error: 'too_many' }, 400); doc.people[nk] = { h, name: who.trim().slice(0, 40) }; changed = true; }
+      me = (await sha('u:' + code + ':' + nk)).slice(0, 16);
+    } else if (join) return json({ error: 'need_identity' }, 400);
     if (role === 'owner' && newPin) {
       const nh = await pinHash(code, String(newPin));
       if (nh === doc.vpin) return json({ error: 'same_pin' }, 400);
