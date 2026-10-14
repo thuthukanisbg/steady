@@ -1,0 +1,8 @@
+{
+  "name": "steady",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Steady — a mobile-first diabetes companion PWA with family sync, deployed on Netlify.",
+  "type": "module",
+  "dependencies": { "@netlify/blobs": "^8.2.0" }
+}
