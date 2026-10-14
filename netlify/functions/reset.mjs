@@ -1,7 +1,7 @@
 // POST /api/reset — forgot-PIN by email.
 //  {action:'request', code, kind:'owner'|'family', name?}  -> emails a 6-digit code (always answers ok, so codes can't be probed)
 //  {action:'confirm', code, kind, name?, rcode, newPin}     -> sets the new PIN
-// owner  : code goes to her email (settings.my_email); sets HER main PIN and logs every device out
+// owner  : code goes to the recovery email (settings.recovery_email), else her email (settings.my_email); sets HER main PIN and logs every device out
 // family : code goes to the email saved for that name under Notifications (else to her email); sets that person's own PIN
 import { json, store, spaceKey, stateKey, sha, pinHash, sendMail, escHtml, validEmail, siteUrl } from './_lib/common.mjs';
 
@@ -28,7 +28,7 @@ export default async (req) => {
     if (kind === 'family') {
       const f = Object.values(doc.recs).find(r => r.type === 'follower' && !r.del && nkey(r.name) === nk && validEmail(r.email));
       to = f ? f.email : (validEmail(s.my_email) ? s.my_email : '');
-    } else to = validEmail(s.my_email) ? s.my_email : '';
+    } else to = validEmail(s.recovery_email) ? s.recovery_email : (validEmail(s.my_email) ? s.my_email : '');
     if (!to) return done({ ok: true });
     const c = String(100000 + Math.floor(Math.random() * 900000));
     await st.setJSON(rk, { at: Date.now(), kind, nk, h: await sha('r:' + code + ':' + c), exp: Date.now() + 15 * 60e3, tries: 0 });
