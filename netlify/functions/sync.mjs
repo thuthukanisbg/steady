@@ -1,11 +1,12 @@
 // POST /api/sync — merge-based sync of one family "space" (all records in a single JSON doc).
 // Each record: { id, type, ts, u (updated ms), del?, ...fields }. Newest `u` wins; deletes are tombstones.
-import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, MAX_MSGS, sha } from './_lib/common.mjs';
+import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, MAX_MSGS, sha, validEmail } from './_lib/common.mjs';
+import { pushSpace } from './_lib/push.mjs';
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
-  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, who, ppin, join = false } = b || {};
+  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, who, ppin, join = false, email } = b || {};
   if (!validCreds(code, pin)) return json({ error: 'bad_credentials' }, 400);
   if (vpin !== undefined && vpin !== null && !/^\d{4,8}$/.test(String(vpin))) return json({ error: 'bad_family_pin' }, 400);
 
@@ -36,7 +37,13 @@ export default async (req) => {
       doc.people = doc.people || {};
       const h = await sha('q:' + code + ':' + nk + ':' + ppin), px = doc.people[nk];
       if (px && px.h !== h) return json({ error: 'name_taken' }, 403);
-      if (!px) { if (Object.keys(doc.people).length >= 30) return json({ error: 'too_many' }, 400); doc.people[nk] = { h, name: who.trim().slice(0, 40) }; changed = true; }
+      const em = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!px) {
+        if (Object.keys(doc.people).length >= 30) return json({ error: 'too_many' }, 400);
+        if (!validEmail(em)) return json({ error: 'need_email' }, 400);
+        doc.people[nk] = { h, name: who.trim().slice(0, 40), email: em }; changed = true;
+      } else if (validEmail(em) && px.email !== em) { px.email = em; changed = true; }
+      else if (join && !validEmail(px.email)) return json({ error: 'need_email' }, 400);
       me = (await sha('u:' + code + ':' + nk)).slice(0, 16);
     } else if (join) return json({ error: 'need_identity' }, 400);
     if (role === 'owner' && newPin) {
@@ -50,6 +57,7 @@ export default async (req) => {
       if (doc.vpin !== vh) { doc.vpin = vh; changed = true; if (cur) bump = true; }
     }
     if (bump) doc.epoch++;
+    const newMsgs = [];
     let followers = Object.values(doc.recs).filter(x => x.type === 'follower' && !x.del).length;
     for (const r of (Array.isArray(records) ? records : []).slice(0, 600)) {
       if (!r || typeof r.id !== 'string' || r.id.length > 40 || typeof r.type !== 'string' || typeof r.u !== 'number') continue;
@@ -69,7 +77,7 @@ export default async (req) => {
       }
       if (me) r.a = me; else delete r.a;
       if (r.type === 'follower' && !r.del && (!ex || ex.del)) { if (followers >= 10) continue; followers++; }
-      if (!ex || r.u >= ex.u) { const { s, ...rest } = r; doc.recs[r.id] = { ...rest, s: ++doc.seq }; changed = true; }
+      if (!ex || r.u >= ex.u) { const { s, ...rest } = r; doc.recs[r.id] = { ...rest, s: ++doc.seq }; changed = true; if (r.type === 'msg' && !r.del && !ex) newMsgs.push(r); }
     }
 
     // keep storage bounded: only the newest MAX_PHOTOS photos keep their image
@@ -85,6 +93,11 @@ export default async (req) => {
       if (res && res.modified === false) continue; // someone else wrote first — retry on fresh data
     }
     // private 1:1 messages are only ever sent to the two people in them (owner included — no one else can read them)
+    // phone alerts for new chat messages: group -> everyone else; private -> only the person it is for (no text in the alert)
+    if (newMsgs.length) await Promise.race([Promise.all(newMsgs.slice(0, 3).map(m => pushSpace(key, m.room === 'g'
+      ? { title: '💬 ' + (m.by || 'Family'), body: String(m.text).slice(0, 90), tag: 'chat-g', url: '/' }
+      : { title: '🔒 ' + (m.by || 'Family'), body: 'sent you a private message', tag: 'chat-' + (m.by || ''), url: '/' },
+      m.room === 'g' ? { skipMe: me || '' } : { onlyMe: m.to }).catch(() => null))), new Promise(r => setTimeout(r, 2500))]);
     const out = Object.values(doc.recs).filter(r => r.s > since && !(r.type === 'msg' && r.room === 'd' && !r.del && r.a !== me && r.to !== me));
     return json({ ok: true, seq: doc.seq, records: out, now: Date.now(), role, hasFamilyPin: !!doc.vpin, epoch: doc.epoch, me });
   }

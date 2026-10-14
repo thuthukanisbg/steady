@@ -8,7 +8,7 @@ const done = (o, st) => { console.log('sos', JSON.stringify({ ok: o.ok, sent: o.
 export default async (req) => {
   if (req.method !== 'POST') return done({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return done({ error: 'bad_json' }, 400); }
-  const { code, pin, lat, lng, acc } = b || {};
+  const { code, pin, lat, lng, acc, ep } = b || {};
   if (!validCreds(code, pin)) return done({ error: 'bad_request' }, 400);
   const st = store(), key = await spaceKey(code);
   const doc = await st.get(key, { type: 'json' });
@@ -19,7 +19,7 @@ export default async (req) => {
   const sk = stateKey(key), state = (await st.get(sk, { type: 'json' })) || {};
   if (Date.now() - (state.sos || 0) < 60e3) return done({ ok: true, sent: 0, reason: 'rate_limited' });
   const pnm = doc.recs?.settings?.name || 'She';
-  const pr = await pushSpace(key, { title: `🆘 ${pnm} needs help`, body: 'Open Steady — call her now', tag: 'sos', url: '/' }, ['viewer']).catch(() => ({ sent: 0 }));
+  const pr = await pushSpace(key, { title: `🆘 ${pnm} needs help`, body: 'Open Steady — call her now', tag: 'sos', url: '/' }, { skipEp: typeof ep === 'string' ? ep : '' }).catch(() => ({ sent: 0 }));
   const to = recipients(doc).map(x => x.email);
   if (!to.length) { if (pr.sent) { state.sos = Date.now(); await st.setJSON(sk, state); } return done({ ok: pr.sent > 0, sent: 0, pushed: pr.sent, reason: pr.sent ? 'push_only' : 'no_recipients' }); }
 

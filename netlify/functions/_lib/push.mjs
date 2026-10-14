@@ -31,12 +31,14 @@ async function jwtFor(endpoint, v) {
 export const subsKey = spaceKey => 'push/' + spaceKey.slice(6);
 
 /** send a notification to every subscribed device in a space whose role is in `roles` */
-export async function pushSpace(spaceKey, msg, roles = ['viewer', 'owner']) {
+export async function pushSpace(spaceKey, msg, opts = {}) {
+  const { skipEp = '', skipMe = '', onlyMe = '' } = Array.isArray(opts) ? {} : opts;
+  const roles = Array.isArray(opts) ? opts : (opts.roles || ['viewer', 'owner']);
   const st = store(), rec = await st.get(subsKey(spaceKey), { type: 'json' });
   if (!rec || !rec.subs?.length) return { sent: 0, failed: 0 };
   const v = await vapid(); let sent = 0, failed = 0; const keep = [];
   for (const s of rec.subs) {
-    if (!roles.includes(s.role)) { keep.push(s); continue; }
+    if (!roles.includes(s.role) || s.sub.endpoint === skipEp || (skipMe && s.me === skipMe) || (onlyMe && s.me !== onlyMe)) { keep.push(s); continue; }
     try {
       const h = (await sha(s.sub.endpoint)).slice(0, 40);
       await st.setJSON('pushmsg/' + h, { ...msg, t: Date.now() });

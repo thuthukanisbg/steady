@@ -257,7 +257,7 @@ function pageMe(){
     <label class="f">Her name</label><input class="inp" data-set="name" value="${esc(c.name)}" placeholder="e.g. Nomsa">
     <label class="f">Her phone number (for family’s “Call” button in an emergency)</label><input class="inp" type="tel" inputmode="tel" data-set="phone" value="${esc(c.phone||'')}" placeholder="e.g. 082 123 4567">
     <button class="btn soft block mt" data-act="sos-test">📍 Allow location for the help button (alerts no one)</button>`}
-    ${carer?`<label class="f">Your name (shown on notes)</label><input class="inp" id="whoname" value="${esc(meta.who||'')}" placeholder="e.g. Thuthu">`:''}
+    ${carer?`<label class="f">Your email (emergency alerts + PIN reset)</label><input class="inp" type="email" id="myemail" value="${esc(meta.email||'')}" placeholder="you@email.com"><label class="f">Your name (shown on notes)</label><input class="inp" id="whoname" value="${esc(meta.who||'')}" placeholder="e.g. Thuthu">`:''}
     ${ro?'':`<label class="f">Avatar</label><div class="emoji-grid">${SD.avatars.map(a=>`<button class="${a===c.avatar?'on':''}" data-act="avatar" data-v="${a}">${a}</button>`).join('')}</div>`}`,true);
   if(!ro){
   h+=sec('🎯 Targets (set with her doctor)',`<label class="f">Units</label><div class="seg"><button class="${c.units==='mmol'?'on':''}" data-act="unit" data-v="mmol">mmol/L</button><button class="${c.units==='mg'?'on':''}" data-act="unit" data-v="mg">mg/dL</button></div>
@@ -302,6 +302,14 @@ function pageMe(){
 U.sosBanner=()=>{const s=list('sos')[0];if(!s||s.status!=='open'||now()-s.ts>3*HOUR)return '';
   const her=!meta.ro&&meta.role!=='carer', nm=cfg().name||'She', ph=String(cfg().phone||'').replace(/[^\d+]/g,'');
   return `<div class="banner crit sosb"><h3>🆘 ${her?'Help alert sent':esc(nm)+' pressed the help button'} · ${ago(s.ts)}</h3><div class="row mt" style="flex-wrap:wrap;gap:8px">${!her&&ph?`<a class="btn primary" href="tel:${ph}">📞 Call ${esc(nm)}</a>`:''}${typeof s.lat==='number'?`<a class="btn soft" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${s.lat},${s.lng}">📍 Location</a>`:''}${her?`<button class="btn primary" data-act="sos-ok">✅ I’m OK now</button>`:`<button class="btn soft" data-act="sos-way">🚗 I’m on my way</button>`}</div></div>`;};
+
+U.pushBanner=()=>{
+  if(!meta.code||meta.pushOn) return '';
+  const ios=/iphone|ipad|ipod/i.test(navigator.userAgent), can=('PushManager' in window)&&('Notification' in window);
+  const perm=('Notification' in window)?Notification.permission:'denied';
+  if(perm==='denied') return `<div class="banner crit"><div class="b">🔕 Alerts are blocked on this phone</div><div class="sm">Allow notifications for Steady in your phone/browser settings so you hear about emergencies.</div></div>`;
+  if(!can) return ios&&!isStandalone()?`<div class="banner crit"><div class="b">🔔 Get emergency alerts on your iPhone</div><div class="sm">Tap <b>Share</b> → <b>Add to Home Screen</b>, then open Steady from the new icon and tap Turn on alerts.</div></div>`:'';
+  return `<div class="banner crit"><div class="b">🔔 Turn on emergency alerts</div><div class="sm">So this phone rings when someone presses help, her sugar is very low/high, or you get a message.</div><button class="btn primary block mt" data-act="push-on">Turn on alerts</button></div>`;};
 
 /* ---------------- CHAT ---------------- */
 const mine=m=>!!meta.me&&m.a===meta.me;

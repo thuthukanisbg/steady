@@ -344,9 +344,9 @@ A.doSync=async function(opts={}){
   const sentU={}; const out=[];
   Object.keys(meta.pending).forEach(id=>{ if(recs[id]){sentU[id]=recs[id].u; out.push(recs[id]);} else delete meta.pending[id]; });
   try{
-    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined,join:!!opts.joining})});
+    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined,email:meta.ppin?(meta.email||undefined):undefined,join:!!opts.joining})});
     const j=await res.json().catch(()=>({}));
-    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.',need_identity:'Enter your name and your own PIN below (family only).',name_taken:'That name is already used with a different personal PIN. Enter your own PIN, or use another name.',too_many:'Too many people in this space.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
+    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.',need_identity:'Enter your name and your own PIN below (family only).',need_email:'Enter your email below — it is used for emergency alerts and resetting your PIN.',name_taken:'That name is already used with a different personal PIN. Enter your own PIN, or use another name.',too_many:'Too many people in this space.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
     let newCrit=[];
     (j.records||[]).forEach(r=>{
       const cur=recs[r.id];
@@ -371,7 +371,7 @@ A.joinSpace=async function(code,pin,create,vpin,ident){
   // Joining an existing space adopts its shared settings; creating uploads everything on this phone.
   const bak=recs.settings, bakPending=meta.pending.settings;
   meta.code=code; meta.pin=pin; meta.seq=0; meta.epoch=undefined; meta.me='';
-  meta.ppin=ident&&ident.ppin||''; if(ident&&ident.who) meta.who=ident.who;
+  meta.ppin=ident&&ident.ppin||''; if(ident&&ident.who) meta.who=ident.who; if(ident&&ident.email) meta.email=ident.email;
   if(!create){ delete recs.settings; delete meta.pending.settings; }
   Object.keys(recs).forEach(id=>meta.pending[id]=1);
   persist();
@@ -392,7 +392,7 @@ A.genCode=function(){const al='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array
 A.notifyServer=function(rec){
   if(!meta.code||!cfg().email_alerts) return;
   const st=gstat(rec.v); if(st==='ok'||st==='high') return;
-  fetch('/api/notify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,kind:'reading',id:rec.id,v:rec.v,ts:rec.ts,ctx:rec.ctx||'',by:rec.by||''})}).catch(()=>{});
+  fetch('/api/notify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,ep:meta.pushEp||undefined,kind:'reading',id:rec.id,v:rec.v,ts:rec.ts,ctx:rec.ctx||'',by:rec.by||''})}).catch(()=>{});
 };
 setInterval(()=>{ if(meta.code&&document.visibilityState==='visible') A.doSync(); },25000);
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&meta.code) A.doSync(); });

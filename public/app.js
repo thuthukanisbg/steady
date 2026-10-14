@@ -24,7 +24,7 @@ function render(quiet){
   if(rendering) return; rendering=true;
   try{
     const fn={home:U.pageHome,food:U.pageFood,progress:U.pageProgress,care:U.pageCare,chat:U.pageChat,me:U.pageMe}[U.tab];
-    const html=`<div class="page${quiet?' noanim':''}">${U.sosBanner?U.sosBanner():''}${fn()}</div>`;
+    const html=`<div class="page${quiet?' noanim':''}">${U.sosBanner?U.sosBanner():''}${U.pushBanner?U.pushBanner():''}${fn()}</div>`;
     const ae=document.activeElement; if(ae&&ae!==document.body&&$('#view').contains(ae)){try{ae.blur()}catch(e){}}
     $('#view').innerHTML=html; renderNav(); tick();
   } finally { rendering=false; }
@@ -269,7 +269,7 @@ function syncHtml(){
   <label class="f">${create?'Choose a PIN (4–8 digits)':'PIN'}</label><input class="inp" id="spin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
   ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:`<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>
   <div class="card mt"><div class="b sm">🙋 Family only — who are you?</div><div class="xs mut">Your name and <b>your own PIN</b> make you the same person on every phone and browser, so your chats and posts follow you. First time? Pick any name and a PIN only you know. Skip this if you are her.</div>
-  <input class="inp mt" id="swho" value="${esc(meta.lastWho||meta.who||'')}" placeholder="Your name, e.g. Thembeka" autocomplete="name"><input class="inp mt" id="sppin" inputmode="numeric" maxlength="8" placeholder="Your own PIN (4–8 digits)" autocomplete="off"></div>`}
+  <input class="inp mt" id="swho" value="${esc(meta.lastWho||meta.who||'')}" placeholder="Your name, e.g. Thembeka" autocomplete="name"><input class="inp mt" id="sppin" inputmode="numeric" maxlength="8" placeholder="Your own PIN (4–8 digits)" autocomplete="off"><input class="inp mt" id="semail" type="email" value="${esc(meta.email||'')}" placeholder="Your email (emergency alerts + PIN reset)" autocomplete="email"></div>`}
   <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button>${create?'':`<button class="linkish block mt center" data-act="forgot">Forgot a PIN? Reset by email</button>`}<div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
 }
 ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():(meta.lastCode||'')};sheet(syncHtml());if(F.code&&el.dataset.v!=='create')setTimeout(()=>{const p=$('#spin');if(p)p.focus();},350);};
@@ -281,9 +281,10 @@ ACT['sync-go']=async el=>{
   if(vp&&!/^\d{4,8}$/.test(vp)){err.textContent='Family PIN must be 4–8 digits.';return;}
   if(vp&&vp===pin){err.textContent='Family PIN must differ from her PIN.';return;}
   el.disabled=true;el.textContent='Connecting…';err.textContent='';
-  const who=(($('#swho')||{}).value||'').trim(), pp=(($('#sppin')||{}).value||'').trim();
+  const who=(($('#swho')||{}).value||'').trim(), pp=(($('#sppin')||{}).value||'').trim(), em=(($('#semail')||{}).value||'').trim().toLowerCase();
+  if(who&&em&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){el.disabled=false;el.textContent='Join';err.textContent='That email doesn’t look right.';return;}
   if(pp&&!/^\d{4,8}$/.test(pp)){el.disabled=false;el.textContent='Join';err.textContent='Your own PIN must be 4–8 digits.';return;}
-  const r=await A.joinSpace(code,pin,mode==='create',vp||undefined,who&&pp?{who,ppin:pp}:undefined);
+  const r=await A.joinSpace(code,pin,mode==='create',vp||undefined,who&&pp?{who,ppin:pp,email:em}:undefined);
   if(!r.ok){el.disabled=false;el.textContent=mode==='create'?'Create & connect':'Join';err.textContent=r.msg+(r.msg.includes('Sync problem')?' Is the site deployed to Netlify with functions enabled?':'');return;}
   meta.onboarded=true;meta.lastCode=code;persist();
   if(mode==='create'){setBody(`<div class="center" style="font-size:54px">🎉</div><h2 class="center">Family space ready</h2><p class="center lead">Share these on the other phone (Profile → Family sync → Join):</p><div class="card mt center"><div class="b" style="font-size:22px;letter-spacing:.08em">${esc(code)}</div><div class="mut sm mt">Her PIN (keep private)</div><div class="b" style="font-size:22px">${esc(pin)}</div>${vp?`<div class="mut sm mt">Family PIN (view-only — share this)</div><div class="b" style="font-size:22px">${esc(vp)}</div>`:''}</div><button class="btn primary block mt2" data-act="close">Done</button>`);}
@@ -332,7 +333,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -351,6 +352,7 @@ document.addEventListener('change',e=>{
   } else if(t.dataset.rem){
     saveSettings({reminders:cfg().reminders.map(r=>r.id===t.dataset.rem?{...r,t:t.value||r.t}:r)});toast('Saved ✔');
   } else if(t.id==='whoname'){meta.who=t.value.trim();persist();toast('Saved ✔');}
+  else if(t.id==='myemail'){const v=t.value.trim().toLowerCase();if(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){meta.email=v;persist();A.scheduleSync();toast('Email saved ✔');}else toast('That email doesn’t look right');}
 });
 document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.classList&&d.classList.contains('sec'))U.open[d.dataset.k]=d.open;},true);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#sheet').classList.contains('open'))closeSheet();});
@@ -407,7 +409,7 @@ async function sosSend(){
   meta.sosSeen=rec.id;persist();A.doSync();
   setBody(`<div class="center" style="font-size:54px">🆘</div><h2 class="center">Sending…</h2>`);
   let msg='',ok=false;
-  try{const r=await fetch('/api/sos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,lat:p?p.lat:undefined,lng:p?p.lng:undefined,acc:p?p.acc:undefined})});const j=await r.json();
+  try{const r=await fetch('/api/sos',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,ep:meta.pushEp||undefined,lat:p?p.lat:undefined,lng:p?p.lng:undefined,acc:p?p.acc:undefined})});const j=await r.json();
     if(j.ok&&j.sent>0){ok=true;msg=`Alert emailed to ${j.sent} ${j.sent===1?'person':'people'}${p?' with your location':' (location was not available)'}. They can also see it in the app.`;}
     else if(j.reason==='rate_limited'){ok=true;msg='Your family was alerted a moment ago.';}
     else if(j.reason==='no_recipients'){msg='No family emails are set up yet, so no email went out. Call someone now.';}
@@ -432,8 +434,8 @@ A.pushSync=async function(){
   if(!meta.code||!pushOK()||Notification.permission!=='granted')return false;
   try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
     if(!sub){const k=(await (await fetch('/api/push?key')).json()).key;sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u2buf(k)});}
-    const r=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,sub:sub.toJSON()})});
-    const ok=r.ok;meta.pushOn=ok;persist();return ok;}catch(e){return false;}};
+    const r=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,sub:sub.toJSON(),dev:meta.dev,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined})});
+    const ok=r.ok;meta.pushOn=ok;meta.pushEp=sub.endpoint;persist();return ok;}catch(e){return false;}};
 ACT['push-on']=async()=>{
   if(!meta.code){toast('Connect the family space first');return;}
   if(!pushOK()){toast(/iphone|ipad/i.test(navigator.userAgent)?'On iPhone: tap Share → Add to Home Screen, open Steady from there, then try again':'This browser can’t do background alerts');return;}

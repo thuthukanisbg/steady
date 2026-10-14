@@ -14,7 +14,7 @@ const done = (o, st) => { console.log('notify', JSON.stringify(o)); return json(
 export default async (req) => {
   if (req.method !== 'POST') return done({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return done({ error: 'bad_json' }, 400); }
-  const { code, pin, v, ts, ctx = '', by = '' } = b || {};
+  const { code, pin, v, ts, ctx = '', by = '', ep } = b || {};
   if (!validCreds(code, pin) || typeof v !== 'number' || !(v > 0 && v < 50)) return done({ error: 'bad_request' }, 400);
 
   const st = store(), key = await spaceKey(code);
@@ -45,7 +45,7 @@ export default async (req) => {
     <p style="color:#888;font-size:12px">General guidance only — follow her doctor's plan. Emergency: 10177 / 112.</p></div>`;
   const text = `${name}'s sugar is ${LABEL[level]}: ${fmt(v)}.\n${TIPS[level]}\nEmergency: 10177 / 112.`;
 
-  const pushed = await pushSpace(key, { title: subject, body: `${fmt(v)} — ${TIPS[level].slice(0, 90)}`, tag: 'alert-' + level, url: '/' }, ['viewer']).catch(() => ({ sent: 0 }));
+  const pushed = await pushSpace(key, { title: subject, body: `${fmt(v)} — ${TIPS[level].slice(0, 90)}`, tag: 'alert-' + level, url: '/' }, { skipEp: typeof ep === 'string' ? ep : '' }).catch(() => ({ sent: 0 }));
   const r = to.length ? await sendMail({ to, subject, html, text }) : { ok: false, reason: 'no_recipients' };
   if (r.ok || pushed.sent) { state.alert = { ...(state.alert || {}), [level]: Date.now() }; await st.setJSON(sk, state); }
   return done({ ok: r.ok || pushed.sent > 0, sent: r.ok ? to.length : 0, pushed: pushed.sent, reason: r.reason });

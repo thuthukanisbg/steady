@@ -26,7 +26,8 @@ export default async (req) => {
     const s = doc.recs?.settings || {};
     let to = '';
     if (kind === 'family') {
-      const f = Object.values(doc.recs).find(r => r.type === 'follower' && !r.del && nkey(r.name) === nk && validEmail(r.email));
+      const own = doc.people?.[nk]?.email;
+      const f = validEmail(own) ? { email: own } : Object.values(doc.recs).find(r => r.type === 'follower' && !r.del && nkey(r.name) === nk && validEmail(r.email));
       to = f ? f.email : (validEmail(s.my_email) ? s.my_email : '');
     } else to = validEmail(s.recovery_email) ? s.recovery_email : (validEmail(s.my_email) ? s.my_email : '');
     if (!to) return done({ ok: true });

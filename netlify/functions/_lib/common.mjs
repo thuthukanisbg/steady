@@ -69,6 +69,19 @@ export function recipients(doc) {
   const s = doc?.recs?.settings || {}, seen = new Set(), out = [];
   const add = (email, name) => { const e = String(email || '').trim().toLowerCase(); if (validEmail(e) && !seen.has(e)) { seen.add(e); out.push({ email: e, name: name || '' }); } };
   (s.carers || []).slice(0, 5).forEach(e => add(e, ''));
+  Object.values(doc?.people || {}).forEach(x => add(x.email, x.name));
   Object.values(doc?.recs || {}).filter(r => r.type === 'follower' && !r.del).slice(0, 10).forEach(r => add(r.email, r.name));
-  return out.slice(0, 12);
+  return out.slice(0, 20);
+}
+
+/* who is this request? (same rules as /api/sync) -> 16-hex author id, or null when it can't be verified */
+export async function identify(doc, role, code, { dev, who, ppin } = {}) {
+  if (role === 'owner') return (await sha('o:' + code)).slice(0, 16);
+  if (typeof who === 'string' && who.trim() && /^\d{4,8}$/.test(String(ppin || ''))) {
+    const nk = who.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40), px = doc.people?.[nk];
+    if (px && px.h === await sha('q:' + code + ':' + nk + ':' + ppin)) return (await sha('u:' + code + ':' + nk)).slice(0, 16);
+    return null;
+  }
+  if (typeof dev === 'string' && /^[a-f0-9]{16,64}$/.test(dev)) return (await sha('d:' + code + ':' + dev)).slice(0, 16);
+  return null;
 }
