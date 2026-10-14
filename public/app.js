@@ -369,7 +369,6 @@ function boot(){
   setInterval(()=>{if(document.visibilityState==='visible'&&U.tab==='home')softRender();},60000);
 }
 boot();
-})();
 
 /* ---- chat ---- */
 ACT['chat-open']=el=>{U.room=el.dataset.v;U.markSeen(U.room);render();U.chatScroll();};
@@ -385,3 +384,4 @@ function ensureMember(){if(!meta.code||!meta.me)return;const nm=meta.who||(meta.
 A.sync.listeners.push(()=>{try{ensureMember()}catch(e){}});
 // poll faster while the chat is open
 setInterval(()=>{if(U.tab==='chat'&&document.visibilityState==='visible'&&meta.code)A.doSync();},5000);
+})();
