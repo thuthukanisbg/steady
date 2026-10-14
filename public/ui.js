@@ -195,9 +195,20 @@ function pageProgress(){
 }
 
 /* ---------------- CARE ---------------- */
-function noteRow(n){
+const RX=['❤️','👏','💪','🙏','😊'];
+const canDel=n=>!meta.ro||(!!meta.me&&n.a===meta.me);
+function reactBar(id,rmap){
+  const mine='rx_'+id+'_'+(meta.me||'loc'), rs=rmap[id]||[];
+  return `<div class="rxbar">${RX.map(e=>{const who=rs.filter(r=>r.e===e),on=who.some(r=>r.id===mine);return `<button class="rx ${on?'on':''}" data-act="react" data-id="${id}" data-e="${e}" title="${esc(who.map(r=>r.by||'').join(', '))}" aria-label="React ${e}">${e}${who.length?`<b>${who.length}</b>`:''}</button>`;}).join('')}</div>`;
+}
+function noteRow(n,rmap){
+  const del=canDel(n)?`<button class="x" data-act="note-del" data-id="${n.id}" aria-label="Delete">✕</button>`:'';
+  if(n.type==='post'){
+    const ok=typeof n.img==='string'&&n.img.startsWith('data:image/jpeg;base64,');
+    return `<div class="note post"><div class="row between"><span class="b sm">📸 Moment</span><span class="xs mut">${esc(n.by||'')} · ${ago(n.ts)} ${del}</span></div>${ok?`<img class="pimg" alt="Photo shared by ${esc(n.by||'family')}" src="${n.img}">`:`<div class="empty" style="padding:14px"><div class="e">🖼️</div>Older photo removed to save space</div>`}${n.text?`<div style="margin-top:6px;white-space:pre-wrap">${esc(n.text)}</div>`:''}${reactBar(n.id,rmap)}</div>`;
+  }
   const ic={do:'✅ Do',dont:'⛔ Don’t',praise:'💪 Cheer',care:'📝 Note'}[n.kind]||'📝';
-  return `<div class="note ${n.kind}"><div class="row between"><span class="b sm">${ic}</span><span class="xs mut">${esc(n.by||'')} · ${ago(n.ts)} <button class="x" data-act="note-del" data-id="${n.id}" aria-label="Delete">✕</button></span></div><div style="margin-top:4px;white-space:pre-wrap">${esc(n.text)}</div></div>`;
+  return `<div class="note ${n.kind}"><div class="row between"><span class="b sm">${ic}</span><span class="xs mut">${esc(n.by||'')} · ${ago(n.ts)} ${del}</span></div><div style="margin-top:4px;white-space:pre-wrap">${esc(n.text)}</div>${reactBar(n.id,rmap)}</div>`;
 }
 function pageCare(){
   const carer=meta.role==='carer', c=cfg();
@@ -209,8 +220,10 @@ function pageCare(){
     if(carer&&last){h+=heroCard(list('glucose'));}
     h+=`<div class="card"><h3>${carer?'Needs attention':'Heads-up'}</h3>${att.length?att.map(a=>`<div class="item"><div class="ico">${a.i}</div><div class="grow"><div class="t">${esc(a.t)}</div><div class="d">${esc(a.x)}</div></div></div>`).join(''):`<div class="empty" style="padding:12px"><div class="e">🌿</div>All calm right now.</div>`}</div>`;
     h+=`<div class="card"><h3>Leave a note</h3><div class="chips">${[['care','📝 Note'],['praise','💪 Cheer'],['do','✅ Do'],['dont','⛔ Don’t']].map(([k,l])=>`<button class="chip ${U.noteKind===k?'on':''}" data-act="note-kind" data-v="${k}">${l}</button>`).join('')}</div><textarea class="ta mt" id="notetext" placeholder="${U.noteKind==='praise'?'So proud of your walks this week! 💛':U.noteKind==='dont'?'e.g. No cooldrinks with dinner':U.noteKind==='do'?'e.g. Check sugar before supper':'Anything the other person should know…'}"></textarea><button class="btn primary block mt" data-act="note-post">Post</button></div>`;
-    const notes=list('note');
-    h+=notes.length?`<div class="stack">${notes.slice(0,30).map(noteRow).join('')}</div>`:`<div class="empty"><div class="e">💌</div>No notes yet. Leave an encouraging one!</div>`;
+    h+=`<div class="card"><h3>Share a moment 📸</h3><input type="file" id="postfile" accept="image/*" capture="user" hidden>${U.postImg?`<img class="pimg" alt="Preview" src="${U.postImg}"><textarea class="ta mt" id="postcap" placeholder="Say something (optional)">${esc(U.postCap||'')}</textarea><div class="row mt"><button class="btn primary grow" data-act="post-go">Share with everyone</button><button class="btn ghost" data-act="post-clear">Cancel</button></div>`:`<div class="sm mut">Take a selfie or share a photo — everyone with access can see it and react.</div><button class="btn soft block mt" data-act="post-photo">📷 Take or choose a photo</button>`}</div>`;
+    const rmap={}; list('react').forEach(r=>{(rmap[r.t]=rmap[r.t]||[]).push(r);});
+    const feed=[...list('note'),...list('post')].sort((a,b)=>b.ts-a.ts).slice(0,40);
+    h+=feed.length?`<div class="stack">${feed.map(n=>noteRow(n,rmap)).join('')}</div>`:`<div class="empty"><div class="e">💌</div>Nothing yet. Leave an encouraging note or share a photo!</div>`;
     if(!meta.code) h+=`<div class="banner info"><h3>🔗 Connect phones</h3><div class="sm">To see each other’s updates live, create a family space in <a class="linkish" data-act="go" data-v="me">Profile → Family sync</a>.</div></div>`;
   } else {
     const dos=list('note').filter(n=>n.kind==='do'), donts=list('note').filter(n=>n.kind==='dont');
@@ -269,6 +282,8 @@ function pageMe(){
       <label class="f">Family code</label><div class="inp row" style="font-weight:800;letter-spacing:.06em">${esc(meta.code)}</div>
       ${ro?`<div class="disc">You’re connected with the family (view-only) PIN.</div>`:`<label class="f">Her PIN (full access — keep private)</label><div class="inp row between"><span id="pinshow">••••</span><button class="linkish sm" data-act="show-pin">Show</button></div>
       <label class="f">Family PIN (view-only — share this one)</label>${meta.hasFamilyPin?`<div class="inp row between"><span id="fpinshow">••••</span><button class="linkish sm" data-act="show-fpin">Show</button></div><button class="btn soft block mt" data-act="famepin">Change family PIN</button>`:`<button class="btn primary block" data-act="famepin">Set a family PIN</button><div class="disc">Without one, family would need her own PIN, which lets them edit.</div>`}
+      <button class="btn soft block mt" data-act="pinchg">Change her PIN</button>
+      <div class="disc">Changing either PIN logs everyone else out — they must log in again.</div>
       <div class="disc">Family join with the code + <b>family PIN</b> via “Join with a code”. They can watch everything but not edit.</div>`}
       <div class="row mt"><button class="btn soft grow" data-act="sync-now">Sync now</button><button class="btn danger" data-act="sync-leave">Disconnect</button></div>`
     :`<div class="lead">Link two phones so what she logs shows up on yours instantly, with alerts when it matters.</div><div class="row mt"><button class="btn primary grow" data-act="open-sync" data-v="create">Create family space</button><button class="btn ghost grow" data-act="open-sync" data-v="join">Join with a code</button></div>`,!meta.code);

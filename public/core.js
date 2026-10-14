@@ -37,7 +37,7 @@ const LS = {
   set(k,v){try{localStorage.setItem('steady.'+k,JSON.stringify(v));return true}catch(e){return false}}
 };
 let recs = LS.get('recs',{});
-let meta = Object.assign({role:'patient',who:'',code:'',pin:'',seq:0,pending:{},onboarded:false,device:uid(),ro:false,vpin:'',hasFamilyPin:false,fired:{},recheck:0,pause:0,notified:{},installSeen:0},LS.get('meta',{}));
+let meta = Object.assign({role:'patient',who:'',code:'',pin:'',seq:0,pending:{},onboarded:false,device:uid(),dev:'',me:'',ro:false,vpin:'',hasFamilyPin:false,fired:{},recheck:0,pause:0,notified:{},installSeen:0},LS.get('meta',{}));
 A.meta = meta;
 function persist(){LS.set('recs',recs);LS.set('meta',meta)}
 A.persist = persist;
@@ -71,17 +71,20 @@ function saveSettings(patch){
 Object.assign(A,{cfg,saveSettings,DEF});
 
 /* ---------- records ---------- */
-const RO_OK=['note','follower'];
+const RO_OK=['note','follower','post','react'];
+if(!meta.dev){const b=new Uint8Array(12);crypto.getRandomValues(b);meta.dev=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');LS.set('meta',meta);}
 function put(r){
   if(meta.ro&&!RO_OK.includes(r.type)){ if(A.toast) A.toast('View-only — family can look but not edit'); return r; }
   r.id=r.id||uid(); r.u=now(); r.ts=r.ts||now();
   r.by=r.by||meta.who||(meta.role==='carer'?'Family':(cfg().name||'Me'));
+  if(meta.me) r.a=meta.me;
   recs[r.id]=r; meta.pending[r.id]=1; persist(); A.scheduleSync(); return r;
 }
 function del(id){
   const r=recs[id]; if(!r) return;
   if(meta.ro&&!RO_OK.includes(r.type)){ if(A.toast) A.toast('View-only — family can look but not edit'); return; }
-  recs[id]={id,type:r.type,del:1,ts:r.ts,u:now()}; meta.pending[id]=1; persist(); A.scheduleSync();
+  if(meta.ro&&(!meta.me||r.a!==meta.me)){ if(A.toast) A.toast('You can only delete what you posted yourself'); return; }
+  recs[id]={id,type:r.type,del:1,ts:r.ts,u:now()}; if(meta.me) recs[id].a=meta.me; meta.pending[id]=1; persist(); A.scheduleSync();
 }
 const list = (type)=>Object.values(recs).filter(r=>r.type===type&&!r.del).sort((a,b)=>b.ts-a.ts);
 const since = (arr,ms)=>arr.filter(r=>r.ts>=ms);
@@ -341,15 +344,16 @@ A.doSync=async function(opts={}){
   const sentU={}; const out=[];
   Object.keys(meta.pending).forEach(id=>{ if(recs[id]){sentU[id]=recs[id].u; out.push(recs[id]);} else delete meta.pending[id]; });
   try{
-    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined})});
+    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch})});
     const j=await res.json().catch(()=>({}));
-    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
+    if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
     let newCrit=[];
     (j.records||[]).forEach(r=>{
       const cur=recs[r.id];
       if(!cur||r.u>cur.u){ const {s,...rest}=r; recs[r.id]=rest; if(!cur&&r.type==='glucose'&&!r.del&&r.by!==meta.who&&now()-r.ts<45*MIN&&gstat(r.v)!=='ok') newCrit.push(rest); }
     });
     Object.keys(sentU).forEach(id=>{ if(recs[id]&&recs[id].u===sentU[id]) delete meta.pending[id]; });
+    if(typeof j.epoch==='number') meta.epoch=j.epoch; if(j.me) meta.me=j.me; if(opts.newPin) meta.pin=opts.newPin;
     if(j.role){ meta.ro=j.role==='viewer'; if(meta.ro) meta.role='carer'; meta.hasFamilyPin=!!j.hasFamilyPin; if(opts.vpin) meta.vpin=opts.vpin; }
     meta.seq=j.seq; persist(); sync.last=now(); setSync('on');
     if(newCrit.length&&A.onRemoteAlert) A.onRemoteAlert(newCrit);
@@ -357,18 +361,20 @@ A.doSync=async function(opts={}){
     syncing=false; if(Object.keys(meta.pending).length) A.scheduleSync();
     return {ok:true};
   }catch(e){
-    syncing=false; const offline=!navigator.onLine||e.name==='TypeError';
+    syncing=false;
+    if(!opts.joining&&meta.code&&(e.code==='wrong_pin'||e.code==='session_expired')){ const why=e.code; A.leaveSpace(); if(A.onSessionEnd) A.onSessionEnd(why); return {ok:false,error:e}; }
+    const offline=!navigator.onLine||e.name==='TypeError';
     setSync(offline?'offline':'err',e.message); return {ok:false,error:e};
   }
 };
 A.joinSpace=async function(code,pin,create,vpin){
   // Joining an existing space adopts its shared settings; creating uploads everything on this phone.
   const bak=recs.settings, bakPending=meta.pending.settings;
-  meta.code=code; meta.pin=pin; meta.seq=0;
+  meta.code=code; meta.pin=pin; meta.seq=0; meta.epoch=undefined; meta.me='';
   if(!create){ delete recs.settings; delete meta.pending.settings; }
   Object.keys(recs).forEach(id=>meta.pending[id]=1);
   persist();
-  const r=await A.doSync({create,vpin});
+  const r=await A.doSync({create,vpin,joining:true});
   if(!r.ok){
     const e=r.error; meta.code='';meta.pin='';
     if(!create&&bak){ recs.settings=bak; if(bakPending) meta.pending.settings=1; }
@@ -376,7 +382,10 @@ A.joinSpace=async function(code,pin,create,vpin){
   }
   return {ok:true};
 };
-A.leaveSpace=function(){meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;persist();setSync('off')};
+A.leaveSpace=function(){
+  // a view-only phone keeps no copy of her data once it is logged out
+  if(meta.ro){ Object.keys(recs).forEach(k=>delete recs[k]); meta.pending={}; }
+  meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
 A.genCode=function(){const al='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(12);crypto.getRandomValues(b);const s=[...b].map(x=>al[x%al.length]).join('');return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12);};
 A.notifyServer=function(rec){
   if(!meta.code||!cfg().email_alerts) return;

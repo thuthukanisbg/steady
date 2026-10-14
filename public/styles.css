@@ -233,3 +233,10 @@ details.sec[open]>summary::after{content:"－"}
 details.sec .secbody{padding:0 16px 16px;margin-top:-4px}
 button.tile{width:100%;font:inherit;color:inherit}
 button.card{font:inherit;color:inherit}
+
+.pimg{display:block;width:100%;max-height:420px;object-fit:cover;border-radius:14px;margin-top:8px;background:var(--line)}
+.rxbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.rx{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:transparent;font-size:15px;line-height:1}
+.rx b{font-size:12px;font-weight:700;color:var(--mut)}
+.rx.on{background:color-mix(in srgb,var(--brand2) 22%,transparent);border-color:var(--brand2)}
+.note.post{border-left:5px solid var(--coral)}

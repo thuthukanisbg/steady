@@ -208,7 +208,23 @@ ACT['rescue-list']=()=>sheet(`<h2>Fast sugar for a low</h2><div class="sm mut">A
 ACT.del=el=>{const id=el.dataset.id;confirmSheet('Delete this entry?','Delete',()=>{A.del(id);render(true);toast('Deleted');});};
 ACT['note-kind']=el=>{const t=($('#notetext')||{}).value||'';U.noteKind=el.dataset.v;render(true);$('#notetext').value=t;};
 ACT['note-post']=()=>{const t=($('#notetext').value||'').trim();if(!t){toast('Write something first');return;}put({type:'note',kind:U.noteKind,text:t});render(true);toast('Posted 💌');};
-ACT['note-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this note?','Delete',()=>{A.del(id);render(true);});};
+ACT['note-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this?','Delete',()=>{A.del(id);render(true);});};
+ACT['react']=el=>{const t=el.dataset.id,e=el.dataset.e,id='rx_'+t+'_'+(meta.me||'loc'),cur=A.recs()[id];
+  if(cur&&!cur.del&&cur.e===e){A.del(id);} else {put({id,type:'react',t,e});}
+  softRender();};
+ACT['post-photo']=()=>{const f=$('#postfile');if(f)f.click();};
+ACT['post-clear']=()=>{U.postImg='';render(true);};
+ACT['post-go']=()=>{const cap=(($('#postcap')||{}).value||'').trim().slice(0,400);
+  if(!U.postImg){toast('Choose a photo first 📷');return;}
+  put({type:'post',text:cap,img:U.postImg});U.postImg='';render(true);toast('Shared 📸');};
+function shrinkImg(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{const M=640,k=Math.min(1,M/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.round(im.naturalWidth*k),h=Math.round(im.naturalHeight*k),c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);URL.revokeObjectURL(url);
+    let q=.7,d=c.toDataURL('image/jpeg',q);while(d.length>110000&&q>.3){q-=.1;d=c.toDataURL('image/jpeg',q);}
+    d.length>135000||!d.startsWith('data:image/jpeg')?rej(new Error('big')):res(d);};
+  im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('bad'));};im.src=url;});}
+document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='postfile'||!t.files||!t.files[0])return;
+  const cap=(($('#postcap')||{}).value||'');try{U.postImg=await shrinkImg(t.files[0]);U.postCap=cap;render(true);}catch(x){toast('Couldn’t use that photo — try another');}t.value='';});
+A.onSessionEnd=why=>{render(true);toast(why==='session_expired'?'🔒 The PIN was changed — please log in again':'🔒 Logged out — please log in again');setTimeout(()=>ACT['open-sync']({dataset:{v:'join'}}),400);};
 
 /* profile actions */
 ACT.role=el=>{if(meta.ro)return;meta.role=el.dataset.v;persist();render(true);};
@@ -228,13 +244,15 @@ ACT['follow-add']=()=>{
   put({type:'follower',email:e,name:n||(meta.ro?meta.who:'')||''});render(true);toast('Added ✔');};
 ACT['follow-del']=el=>{A.del(el.dataset.id);render(true);toast('Removed');};
 ACT['famepin']=()=>sheet(`<h2>Family view-only PIN</h2><div class="lead">Family who join with <b>this</b> PIN can watch everything but can’t change anything. Keep her own PIN to yourself.</div><label class="f">Family PIN (4–8 digits, different from yours)</label><input class="inp" id="fpin" inputmode="numeric" maxlength="8" value="${esc(meta.vpin||'')}" autocomplete="off"><button class="btn primary block mt2" data-act="famepin-go">Save family PIN</button><div id="fperr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`);
-ACT['famepin-go']=async el=>{const v=($('#fpin').value||'').trim(),err=$('#fperr');if(!/^\d{4,8}$/.test(v)){err.textContent='4–8 digits please.';return;}if(v===meta.pin){err.textContent='Must be different from her PIN.';return;}el.disabled=true;const r=await A.doSync({vpin:v});if(!r.ok){el.disabled=false;err.textContent=(r.error&&r.error.message)||'Could not save — try again';return;}closeSheet();render(true);toast('Family PIN saved ✔');};
+ACT['pinchg']=()=>sheet(`<h2>Change her PIN</h2><div class="lead">Everyone else — family and any other phone — will be logged out and must log in again with the new PIN(s).</div><label class="f">New PIN (4–8 digits)</label><input class="inp" id="npin" inputmode="numeric" maxlength="8" autocomplete="off"><button class="btn primary block mt2" data-act="pinchg-go">Change PIN</button><div id="nperr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`);
+ACT['pinchg-go']=async el=>{const v=($('#npin').value||'').trim(),err=$('#nperr');if(!/^\d{4,8}$/.test(v)){err.textContent='4–8 digits please.';return;}if(v===meta.pin){err.textContent='That is already her PIN.';return;}if(v===meta.vpin){err.textContent='Must differ from the family PIN.';return;}el.disabled=true;const r=await A.doSync({newPin:v});if(!r.ok){el.disabled=false;err.textContent=(r.error&&r.error.message)||'Could not change — try again';return;}closeSheet();render(true);toast('PIN changed — everyone else must log in again');};
+ACT['famepin-go']=async el=>{const v=($('#fpin').value||'').trim(),err=$('#fperr');if(!/^\d{4,8}$/.test(v)){err.textContent='4–8 digits please.';return;}if(v===meta.pin){err.textContent='Must be different from her PIN.';return;}el.disabled=true;const r=await A.doSync({vpin:v});if(!r.ok){el.disabled=false;err.textContent=(r.error&&r.error.message)||'Could not save — try again';return;}closeSheet();render(true);toast('Family PIN saved ✔ — everyone must log in again');};
 ACT['show-fpin']=el=>{const s=$('#fpinshow');const on=s.textContent!=='••••';s.textContent=on?'••••':(meta.vpin||'(set on another phone)');el.textContent=on?'Show':'Hide';};
 ACT['carer-del']=el=>{saveSettings({carers:cfg().carers.filter((_,k)=>k!==+el.dataset.i)});render(true);};
 ACT['notif-enable']=()=>{if(!('Notification' in window)){toast('Not supported on this browser');return;}Notification.requestPermission().then(p=>{render(true);if(p==='granted'){notify('Steady','Reminders are on 🎉','welcome');}});};
 ACT['show-pin']=el=>{const s=$('#pinshow');const on=s.textContent!=='••••';s.textContent=on?'••••':meta.pin;el.textContent=on?'Show':'Hide';};
 ACT['sync-now']=async()=>{toast('Syncing…');const r=await A.doSync();toast(r.ok?'✔ Up to date':'Couldn’t sync — will retry');render(true);};
-ACT['sync-leave']=()=>confirmSheet('Disconnect from the family space? Your data stays on this phone.','Disconnect',()=>{A.leaveSpace();render(true);});
+ACT['sync-leave']=()=>confirmSheet(meta.ro?'Log out? You’ll need the code and family PIN to see her updates again.':'Disconnect from the family space? Your data stays on this phone.',meta.ro?'Log out':'Disconnect',()=>{A.leaveSpace();render(true);});
 ACT.export=()=>{const b=new Blob([A.exportCSV()],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='steady-'+dayKey(now())+'.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);};
 ACT.reset=()=>confirmSheet('Erase all data on this phone? Synced data stays in the family space.','Erase',()=>{A.resetLocal();render(true);toast('Cleared');});
 ACT.install=async()=>{if(!U.deferred)return;U.deferred.prompt();await U.deferred.userChoice;U.deferred=null;meta.installSeen=2;persist();render(true);};
@@ -307,7 +325,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
