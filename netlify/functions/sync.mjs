@@ -43,10 +43,8 @@ export default async (req) => {
       const em = typeof email === 'string' ? email.trim().toLowerCase() : '';
       if (!px) {
         if (Object.keys(doc.people).length >= 30) return json({ error: 'too_many' }, 400);
-        if (!validEmail(em)) return json({ error: 'need_email' }, 400);
-        doc.people[nk] = { h, name: who.trim().slice(0, 40), email: em }; changed = true;
+        doc.people[nk] = { h, name: who.trim().slice(0, 40), email: validEmail(em) ? em : '' }; changed = true;
       } else if (validEmail(em) && px.email !== em) { px.email = em; changed = true; }
-      else if (join && !validEmail(px.email)) return json({ error: 'need_email' }, 400);
       me = (await sha('u:' + code + ':' + nk)).slice(0, 16);
     } else if (join) return json({ error: 'need_identity' }, 400);
     if (role === 'owner' && newPin) {

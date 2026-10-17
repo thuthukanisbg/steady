@@ -3,7 +3,7 @@
 'use strict';
 const A=window.A, SD=window.SD, U=A.ui;
 const {esc,now,dayKey,hhmm,toLocalInput,ago,MIN,HOUR,cfg,saveSettings,put,list,fmtG,fromIn,unitL,gstat,SL,meta,persist}=A;
-const $=(s,e=document)=>e.querySelector(s), $$=(s,e=document)=>[...e.querySelectorAll(s)];
+const pf=v=>parseFloat(String(v==null?'':v).replace(',','.')), $=(s,e=document)=>e.querySelector(s), $$=(s,e=document)=>[...e.querySelectorAll(s)];
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 let F={}, pendingRender=false, tt;
 
@@ -55,7 +55,7 @@ forms.glucose=()=>{
   const hr=new Date().getHours(), had=A.today().g.length;
   if(!F.ctx) F.ctx=(!had&&hr<10)?'fasting':hr>=21?'bed':'random';
   return `<h2>Log sugar</h2><div class="sm mut">Type your meter reading.</div>
-  <div class="center mt"><input id="gv" class="inp bigin" type="number" inputmode="decimal" step="any" placeholder="0.0" aria-label="Glucose reading"><div class="mut sm" style="margin-top:4px">${unitL()}</div></div>
+  <div class="center mt"><input id="gv" class="inp bigin" type="text" inputmode="decimal" step="any" placeholder="0.0" aria-label="Glucose reading"><div class="mut sm" style="margin-top:4px">${unitL()}</div></div>
   <label class="f">When was it?</label><div class="chips">${SD.contexts.map(c=>`<button class="chip ${F.ctx===c[0]?'on':''}" data-act="pick" data-grp="ctx" data-v="${c[0]}">${c[1]} ${c[2]}</button>`).join('')}</div>
   ${timeNote()}<button class="btn primary block mt2" data-act="save-glucose">Save reading</button>`;
 };
@@ -69,7 +69,7 @@ forms.insulin=()=>{
   return `<h2>Log insulin</h2>${c.plan_note?`<details class="acc"><summary>📋 Doctor’s plan</summary><div class="sm" style="white-space:pre-wrap;margin-top:8px">${esc(c.plan_note)}</div></details>`:''}
   <label class="f">Which insulin?</label><div class="chips">${c.insulins.map((i,k)=>`<button class="chip ${F.ins===k?'on':''}" data-act="pick" data-grp="ins" data-v="${k}">${esc(i.n)}</button>`).join('')}<button class="chip ${F.ins==='o'?'on':''}" data-act="pick" data-grp="ins" data-v="o">Other…</button></div>
   ${F.ins==='o'?'<input class="inp mt" id="insother" placeholder="Insulin name">':''}
-  <label class="f">Units taken</label><input class="inp bigin" style="font-size:44px;height:80px" id="iu" type="number" inputmode="decimal" step="0.5" placeholder="0">
+  <label class="f">Units taken</label><input class="inp bigin" style="font-size:44px;height:80px" id="iu" type="text" inputmode="decimal" step="0.5" placeholder="0">
   <div id="stackwarn">${stackWarn()}</div>${timeNote()}<button class="btn primary block mt2" data-act="save-insulin">Save dose</button><div class="disc center">Steady only records doses. It never suggests how much to take.</div>`;
 };
 function mealResults(q){
@@ -94,7 +94,7 @@ forms.meal=()=>{
   return `<h2>Log a meal</h2><div class="chips">${['breakfast','lunch','dinner','snack'].map(s=>`<button class="chip ${F.slot===s?'on':''}" data-act="pick" data-grp="slot" data-v="${s}">${cap(s)}</button>`).join('')}</div>
   <label class="f">Add foods</label><input class="inp" id="mq" placeholder="🔍 Search: pap, apple, egg…" autocomplete="off"><div id="mres" class="mt">${mealResults('')}</div>
   <div id="msel" class="mt">${mealSel()}</div>
-  <details class="acc"><summary>Add something not in the list</summary><div class="row mt"><input class="inp" id="cname" placeholder="Food"><input class="inp" id="ccarb" type="number" inputmode="numeric" placeholder="g carbs" style="width:110px"></div><button class="btn soft block mt" data-act="meal-custom">Add to meal</button></details>
+  <details class="acc"><summary>Add something not in the list</summary><div class="row mt"><input class="inp" id="cname" placeholder="Food"><input class="inp" id="ccarb" type="text" inputmode="decimal" placeholder="g carbs" style="width:110px"></div><button class="btn soft block mt" data-act="meal-custom">Add to meal</button></details>
   ${timeNote()}<button class="btn primary block mt2" data-act="save-meal">Save meal</button>`;
 };
 forms.walk=()=>{
@@ -103,7 +103,7 @@ forms.walk=()=>{
   <div class="banner good"><b>Before you go</b><div class="sm">Check your sugar. If it’s on the low side, have a small carb snack first (ask your care team what’s right for you). Skip it if sugar is very high and you feel unwell. Carry fast sugar and water.</div></div>
   <button class="btn coral block mt" data-act="walk-start">▶ Start live timer</button>
   <div class="center mut sm mt">— or log a finished one —</div>
-  <label class="f">Minutes</label><input class="inp bigin" style="font-size:44px;height:80px" id="wm" type="number" inputmode="numeric" placeholder="${c.walk_goal}">
+  <label class="f">Minutes</label><input class="inp bigin" style="font-size:44px;height:80px" id="wm" type="text" inputmode="decimal" placeholder="${c.walk_goal}">
   <label class="f">Type</label><div class="chips">${[['walk','🚶 Walk'],['jog','🏃 Jog'],['gym','🏋️ Gym'],['chores','🧹 Active chores']].map(([k,l])=>`<button class="chip ${F.kind2===k?'on':''}" data-act="pick" data-grp="kind2" data-v="${k}">${l}</button>`).join('')}</div>
   ${timeNote()}<button class="btn primary block mt2" data-act="save-walk">Save</button>`;
 };
@@ -111,7 +111,7 @@ forms.mood=()=>{
   F.mood=F.mood||4; F.sym=F.sym||[]; F.stress=F.stress||'low';
   return `<h2>How are you feeling?</h2><div class="moods mt">${SD.moods.map((m,i)=>`<button class="${F.mood===i+1?'on':''}" data-act="pick" data-grp="mood" data-v="${i+1}" aria-label="Mood ${i+1}">${m}</button>`).join('')}</div>
   <label class="f">Anything going on? (tap all that apply)</label><div class="chips">${SD.symptoms.map(s=>`<button class="chip ${F.sym.includes(s)?'on':''}" data-act="toggle" data-grp="sym" data-v="${esc(s)}">${esc(s)}</button>`).join('')}</div>
-  <div class="grid2"><div><label class="f">Sleep last night (h)</label><input class="inp" id="sl" type="number" inputmode="decimal" step="0.5" placeholder="7"></div><div><label class="f">Stress</label><div class="chips">${['low','medium','high'].map(s=>`<button class="chip ${F.stress===s?'on':''}" data-act="pick" data-grp="stress" data-v="${s}">${cap(s)}</button>`).join('')}</div></div></div>
+  <div class="grid2"><div><label class="f">Sleep last night (h)</label><input class="inp" id="sl" type="text" inputmode="decimal" step="0.5" placeholder="7"></div><div><label class="f">Stress</label><div class="chips">${['low','medium','high'].map(s=>`<button class="chip ${F.stress===s?'on':''}" data-act="pick" data-grp="stress" data-v="${s}">${cap(s)}</button>`).join('')}</div></div></div>
   ${timeNote()}<button class="btn primary block mt2" data-act="save-mood">Save</button>`;
 };
 forms.treat=()=>{
@@ -119,7 +119,7 @@ forms.treat=()=>{
   return `<h2>Log a treat</h2><div class="sm mut">${wt.n} of ${c.treats_week} treats used this week</div>
   <label class="f">Quick pick</label><div class="chips">${SD.treats.map((t,i)=>`<button class="chip" data-act="treat-pick" data-i="${i}">${t.e} ${esc(t.n)}</button>`).join('')}</div>
   <label class="f">What was it?</label><input class="inp" id="tw" placeholder="e.g. Half a koeksister">
-  <label class="f">Approx. carbs (g)</label><input class="inp" id="tc" type="number" inputmode="numeric" placeholder="15">
+  <label class="f">Approx. carbs (g)</label><input class="inp" id="tc" type="text" inputmode="decimal" placeholder="15">
   <label class="f">Was it…</label><div class="chips"><button class="chip ${!F.craving?'on':''}" data-act="pick" data-grp="craving" data-v="0">📅 Planned</button><button class="chip ${F.craving?'on':''}" data-act="pick" data-grp="craving" data-v="1">⚡ A craving</button></div>
   ${timeNote()}<button class="btn coral block mt2" data-act="save-treat">Save treat</button>`;
 };
@@ -157,21 +157,21 @@ ACT['plan-log']=el=>{
 ACT['remind-go']=el=>{const k=el.dataset.k;if(k==='sugar')openAdd('glucose');else if(k==='insulin')openAdd('insulin');else if(k==='walk')openAdd('walk');else{U.sub.food='plan';U.planDay=new Date().getDay();go('food');}};
 
 ACT['save-glucose']=()=>{
-  const raw=parseFloat($('#gv').value); if(!(raw>0)){toast('Enter your reading first');return;}
+  const raw=pf($('#gv').value); if(!(raw>0)){toast('Enter your reading first');return;}
   const v=fromIn(raw); if(v<0.5||v>45){toast('That number looks off — please double-check');return;}
   const ts=parseTime($('#ft'))||now(), ctx=F.ctx, note=($('#fn').value||'').trim();
   const rec=withBadges(()=>put({type:'glucose',v:Math.round(v*100)/100,ctx,note,ts}));
   meta.recheck=0;persist();A.notifyServer(rec);closeSheet();render(true);showResult(rec);
 };
 ACT['save-insulin']=()=>{
-  const c=cfg(), u=parseFloat($('#iu').value); if(!(u>0)||u>300){toast('Enter the units taken');return;}
+  const c=cfg(), u=pf($('#iu').value); if(!(u>0)||u>300){toast('Enter the units taken');return;}
   let name,cat; if(F.ins==='o'){name=($('#insother').value||'').trim();cat='other';if(!name){toast('Name the insulin');return;}}else{const i=c.insulins[F.ins]||c.insulins[0];if(!i){toast('Add an insulin in Profile first');return;}name=i.n;cat=i.c;}
   withBadges(()=>put({type:'insulin',name,cat,units:u,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
   closeSheet();render(true);toast('💉 Dose logged');
 };
 ACT['meal-add']=el=>{const f=SD.foods[+el.dataset.fi],ex=F.items.find(x=>x.n===f.n);if(ex)ex.q+=1;else F.items.push({n:f.n,c:f.c,q:1,e:f.e});$('#msel').innerHTML=mealSel();};
-ACT['meal-q']=el=>{const i=+el.dataset.i,it=F.items[i];it.q=Math.round((it.q+parseFloat(el.dataset.d))*2)/2;if(it.q<=0)F.items.splice(i,1);$('#msel').innerHTML=mealSel();};
-ACT['meal-custom']=()=>{const n=($('#cname').value||'').trim(),c=parseFloat($('#ccarb').value);if(!n||!(c>=0)){toast('Add a name and carbs');return;}F.items.push({n,c,q:1,e:'🍽️'});$('#cname').value='';$('#ccarb').value='';$('#msel').innerHTML=mealSel();};
+ACT['meal-q']=el=>{const i=+el.dataset.i,it=F.items[i];it.q=Math.round((it.q+pf(el.dataset.d))*2)/2;if(it.q<=0)F.items.splice(i,1);$('#msel').innerHTML=mealSel();};
+ACT['meal-custom']=()=>{const n=($('#cname').value||'').trim(),c=pf($('#ccarb').value);if(!n||!(c>=0)){toast('Add a name and carbs');return;}F.items.push({n,c,q:1,e:'🍽️'});$('#cname').value='';$('#ccarb').value='';$('#msel').innerHTML=mealSel();};
 ACT['save-meal']=()=>{
   if(!F.items.length){toast('Add at least one food');return;}
   const tot=mealTotal(), tg=F.slot==='snack'?cfg().carb_snack:cfg().carb_meal;
@@ -185,13 +185,13 @@ ACT['walk-finish']=()=>{
   setTimeout(()=>{openAdd('glucose',{ctx:'walk'});toast('Check your sugar after your walk');},700);
 };
 ACT['save-walk']=()=>{
-  const m=parseFloat($('#wm').value);if(!(m>0)||m>600){toast('Enter minutes');return;}
+  const m=pf($('#wm').value);if(!(m>0)||m>600){toast('Enter minutes');return;}
   withBadges(()=>put({type:'walk',min:Math.round(m),kind:F.kind2,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
   closeSheet();render(true);toast('🚶 Activity logged');
 };
 ACT['save-mood']=()=>{
   const sym=F.sym.slice(), low=sym.filter(s=>['Shaky','Sweaty','Dizzy','Very hungry','Fast heartbeat','Irritable'].includes(s)).length, high=sym.filter(s=>['Very thirsty','Need to wee a lot','Blurry vision'].includes(s)).length;
-  withBadges(()=>put({type:'mood',mood:F.mood,symptoms:sym,sleep:parseFloat($('#sl').value)||0,stress:F.stress,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  withBadges(()=>put({type:'mood',mood:F.mood,symptoms:sym,sleep:pf($('#sl').value)||0,stress:F.stress,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
   closeSheet();render(true);
   if(low>=2||high>=2){setTimeout(()=>sheet(`<h2>Check your sugar now</h2><p class="lead mt">${low>=2?'Shaky, sweaty, dizzy or hungry can be signs of <b>low</b> sugar.':'Very thirsty, blurry vision or lots of wees can be signs of <b>high</b> sugar.'} A quick check tells you what to do.</p><button class="btn primary block mt2" data-act="add" data-v="glucose">🩸 Log my sugar</button>`),300);}
   else toast('🙂 Mood logged');
@@ -200,7 +200,7 @@ ACT['treat-pick']=el=>{const t=SD.treats[+el.dataset.i];$('#tw').value=t.n;$('#t
 ACT['save-treat']=()=>{
   const what=($('#tw').value||'').trim(); if(!what){toast('What did you have?');return;}
   const c=cfg(), before=A.weekTreats().n;
-  withBadges(()=>put({type:'treat',what,carbs:parseFloat($('#tc').value)||0,craving:!!F.craving,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  withBadges(()=>put({type:'treat',what,carbs:pf($('#tc').value)||0,craving:!!F.craving,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
   closeSheet();render(true);
   toast(before+1>c.treats_week?'Over this week’s budget — that’s okay, tomorrow is a fresh start 💛':'🍫 Enjoy it! Recheck sugar in about 2 hours.');
 };
@@ -269,7 +269,7 @@ function syncHtml(){
   <label class="f">${create?'Choose a PIN (4–8 digits)':'PIN'}</label><input class="inp" id="spin" inputmode="numeric" maxlength="8" placeholder="••••" autocomplete="off">
   ${create?`<label class="f">Family view-only PIN (optional — family can watch but not edit)</label><input class="inp" id="svpin" inputmode="numeric" maxlength="8" placeholder="e.g. a different 4–8 digits" autocomplete="off">`:`<div class="disc">Family: use the <b>family PIN</b> you were given — it opens a view-only copy.</div>
   <div class="card mt"><div class="b sm">🙋 Family only — who are you?</div><div class="xs mut">Your name and <b>your own PIN</b> make you the same person on every phone and browser, so your chats and posts follow you. First time? Pick any name and a PIN only you know. Skip this if you are her.</div>
-  <input class="inp mt" id="swho" value="${esc(meta.lastWho||meta.who||'')}" placeholder="Your name, e.g. Thembeka" autocomplete="name"><input class="inp mt" id="sppin" inputmode="numeric" maxlength="8" placeholder="Your own PIN (4–8 digits)" autocomplete="off"><input class="inp mt" id="semail" type="email" value="${esc(meta.email||'')}" placeholder="Your email (emergency alerts + PIN reset)" autocomplete="email"></div>`}
+  <input class="inp mt" id="swho" value="${esc(meta.lastWho||meta.who||'')}" placeholder="Your name, e.g. Thembeka" autocomplete="name"><input class="inp mt" id="sppin" inputmode="numeric" maxlength="8" placeholder="Your own PIN (4–8 digits)" autocomplete="off"><input class="inp mt" id="semail" type="email" value="${esc(meta.email||'')}" placeholder="Your email (optional — only used to reset your PIN)" autocomplete="email"></div>`}
   <button class="btn primary block mt2" data-act="sync-go">${create?'Create & connect':'Join'}</button>${create?'':`<button class="linkish block mt center" data-act="forgot">Forgot a PIN? Reset by email</button>`}<div id="syncerr" class="sm" style="color:var(--crit-low);margin-top:8px"></div>`;
 }
 ACT['open-sync']=el=>{F={step:'sync',mode:el.dataset.v,code:el.dataset.v==='create'?A.genCode():(meta.lastCode||'')};sheet(syncHtml());if(F.code&&el.dataset.v!=='create')setTimeout(()=>{const p=$('#spin');if(p)p.focus();},350);};
@@ -343,10 +343,10 @@ document.addEventListener('input',e=>{
 document.addEventListener('change',e=>{
   const t=e.target;
   if(t.dataset.set){
-    let v=t.value; if(t.dataset.num){v=parseFloat(v);if(!(v>=0)){render(true);return;}}
+    let v=t.value; if(t.dataset.num){v=pf(v);if(!(v>=0)){render(true);return;}}
     saveSettings({[t.dataset.set]:v}); if(t.dataset.set==='name'&&meta.role!=='carer'){meta.who=v;persist();} toast('Saved ✔');
   } else if(t.dataset.gset){
-    const k=t.dataset.gset,c=cfg(),v=fromIn(parseFloat(t.value)), n={crit_low:c.crit_low,low:c.low,high:c.high,crit_high:c.crit_high};n[k]=v;
+    const k=t.dataset.gset,c=cfg(),v=fromIn(pf(t.value)), n={crit_low:c.crit_low,low:c.low,high:c.high,crit_high:c.crit_high};n[k]=v;
     if(!(v>0)||!(n.crit_low<n.low&&n.low<n.high&&n.high<n.crit_high)){toast('Keep them in order: very low < low < high < very high');render(true);return;}
     saveSettings({[k]:Math.round(v*100)/100});toast('Saved ✔');
   } else if(t.dataset.rem){
