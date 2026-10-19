@@ -312,12 +312,15 @@ U.pushBanner=()=>{
   return `<div class="banner crit"><div class="b">🔔 Turn on emergency alerts</div><div class="sm">So this phone rings when someone presses help, her sugar is very low/high, or you get a message.</div><button class="btn primary block mt" data-act="push-on">Turn on alerts</button></div>`;};
 
 /* ---------------- CHAT ---------------- */
-const mine=m=>!!meta.me&&m.a===meta.me;
+const nname=n=>String(n||'').trim().toLowerCase().replace(/\s+/g,' ');
+/* same name = same person, even if they joined before personal PINs and got an older id */
+function idsOf(id){const ms=list('member'),me=ms.find(x=>x.id==='mb_'+id),s=new Set([id]);if(me&&nname(me.name))ms.forEach(x=>{if(nname(x.name)===nname(me.name))s.add(x.id.slice(3));});return s;}
+const mine=m=>!!meta.me&&idsOf(meta.me).has(m.a);
 const partner=m=>mine(m)?m.to:m.a;
 const roomOf=m=>m.room==='g'?'g':partner(m);
-function msgs(room){return list('msg').filter(m=>room==='g'?m.room==='g':(m.room==='d'&&(mine(m)?m.to===room:(m.a===room&&m.to===meta.me)))).sort((a,b)=>a.ts-b.ts);}
+function msgs(room){if(room==='g')return list('msg').filter(m=>m.room==='g').sort((a,b)=>a.ts-b.ts);const P=idsOf(room),M=idsOf(meta.me);return list('msg').filter(m=>m.room==='d'&&((M.has(m.a)&&P.has(m.to))||(P.has(m.a)&&M.has(m.to)))).sort((a,b)=>a.ts-b.ts);}
 function unreadIn(room){const seen=(meta.seen||{})[room]||0;return msgs(room).filter(m=>!mine(m)&&m.ts>seen).length;}
-function members(){const seen={};return list('member').filter(m=>m.id!=='mb_'+meta.me&&!seen[m.id]&&(seen[m.id]=1)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));}
+function members(){const seen={},M=idsOf(meta.me);return list('member').filter(m=>!M.has(m.id.slice(3))&&!seen[nname(m.name)||m.id]&&(seen[nname(m.name)||m.id]=1)).sort((a,b)=>(a.name||'').localeCompare(b.name||''));}
 U.unread=()=>{if(!meta.code||!meta.me)return 0;let n=unreadIn('g');members().forEach(m=>{n+=unreadIn(m.id.slice(3));});return n;};
 U.markSeen=room=>{meta.seen=meta.seen||{};const l=msgs(room);meta.seen[room]=l.length?l[l.length-1].ts:now();A.persist();};
 function bubble(m){const me=mine(m),del=me?`<button class="x" data-act="msg-del" data-id="${m.id}" aria-label="Delete message">✕</button>`:'';

@@ -103,7 +103,13 @@ export default async (req) => {
       ? { title: '💬 ' + (m.by || 'Family'), body: String(m.text).slice(0, 90), tag: 'chat-g', url: '/' }
       : { title: '🔒 ' + (m.by || 'Family'), body: 'sent you a private message', tag: 'chat-' + (m.by || ''), url: '/' },
       m.room === 'g' ? { skipMe: me || '' } : { onlyMe: m.to }).catch(() => null))), new Promise(r => setTimeout(r, 2500))]);
-    const out = Object.values(doc.recs).filter(r => r.s > since && !(r.type === 'msg' && r.room === 'd' && !r.del && r.a !== me && r.to !== me));
+    // same name = same person: private messages sent to an older identity of this name (e.g. before personal PINs) are still theirs
+    const mine = new Set([me]);
+    if (role !== 'owner' && typeof who === 'string' && who.trim() && me) {
+      const wn = who.trim().toLowerCase().replace(/\s+/g, ' ');
+      for (const x of Object.values(doc.recs)) if (x.type === 'member' && !x.del && String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === wn && /^mb_[a-f0-9]{16}$/.test(x.id)) mine.add(x.id.slice(3));
+    }
+    const out = Object.values(doc.recs).filter(r => (r.s > since || (r.type === 'msg' && r.room === 'd' && !r.del && mine.has(r.to) && r.to !== me)) && !(r.type === 'msg' && r.room === 'd' && !r.del && r.a !== me && !mine.has(r.to)));
     return json({ ok: true, seq: doc.seq, records: out, now: Date.now(), role, hasFamilyPin: !!doc.vpin, epoch: doc.epoch, me });
   }
   return json({ error: 'busy' }, 409);
