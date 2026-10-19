@@ -262,7 +262,8 @@ ACT.install=async()=>{if(!U.deferred)return;U.deferred.prompt();await U.deferred
 ACT['install-dismiss']=()=>{meta.installSeen=2;persist();render(true);};
 
 /* sync + onboarding sheets */
-function syncHtml(){
+function syncHtml(){const h=syncHtml0();if(F.mode==='create')return h;return `<h2>Sign in</h2><div class="lead">Use the email the family space owner added for you — we’ll email you a code.</div><label class="f">Your email</label><input class="inp" id="oemail" type="email" autocomplete="email" placeholder="you@example.com" value="${esc(meta.lastEmail||'')}"><button class="btn primary block mt" data-act="otp-send">Email me a code</button><div id="otpbox" style="display:none"><label class="f">6-digit code</label><input class="inp" id="ocode" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code"><button class="btn primary block mt" data-act="otp-go">Sign in</button></div><div id="otperr" class="sm" style="color:var(--crit-low);margin-top:8px"></div><details class="acc mt2"><summary>Use a family code + PIN instead</summary>${h}</details>`;}
+function syncHtml0(){
   const create=F.mode==='create';
   return `<h2>${create?'Create a family space':'Join with a code'}</h2><div class="lead">${create?'You’ll get a code. Share it and your PIN with family so they can join.':(F.code?'Welcome back — just type the PIN.':'Type the code and PIN you were given.')}</div>
   <label class="f">Family code</label><input class="inp" id="scode" value="${esc(F.code||'')}" ${create?'readonly':''} placeholder="XXXX-XXXX-XXXX" autocapitalize="characters" autocomplete="off" style="font-weight:800;letter-spacing:.06em">
@@ -391,6 +392,17 @@ ACT['call']=async el=>{const kind=el.dataset.v,r=U.room;if(!r||!meta.code)return
   const txt=(kind==='voice'?'📞 Voice call — tap to join: ':'🎥 Video call — tap to join: ')+url;
   if(r==='g')put({type:'msg',room:'g',text:txt});else put({type:'msg',room:'d',to:r,text:txt});
   U.markSeen(r);U.chatRefresh();window.open(url,'_blank','noopener');};
+ACT['otp-send']=async el=>{const em=(($('#oemail')||{}).value||'').trim().toLowerCase(),err=$('#otperr');if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){err.textContent='That email doesn’t look right.';return;}
+  el.disabled=true;err.style.color='var(--mut)';err.textContent='Sending…';const ok=await A.emailStart(em);el.disabled=false;
+  if(!ok){err.style.color='var(--crit-low)';err.textContent='No connection — try again.';return;}
+  meta.lastEmail=em;persist();$('#otpbox').style.display='block';err.textContent='If that email was added by the owner, a code is on its way (check spam too).';setTimeout(()=>{const c=$('#ocode');c&&c.focus();},50);};
+ACT['otp-go']=async el=>{const em=(($('#oemail')||{}).value||'').trim().toLowerCase(),c=(($('#ocode')||{}).value||'').trim(),err=$('#otperr');if(!/^\d{6}$/.test(c)){err.style.color='var(--crit-low)';err.textContent='Enter the 6-digit code.';return;}
+  el.disabled=true;el.textContent='Signing in…';const r=await A.emailVerify(em,c);
+  if(!r.ok){el.disabled=false;el.textContent='Sign in';err.style.color='var(--crit-low)';err.textContent=r.msg;return;}
+  closeSheet();toast('Signed in ✔');U.tab='chat';render(true);};
+ACT['inv-add']=async el=>{const n=(($('#invname')||{}).value||'').trim(),e=(($('#invemail')||{}).value||'').trim().toLowerCase();if(!n||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){toast('Add a name and a valid email');return;}
+  el.disabled=true;const r=await A.invite(n,e,false);el.disabled=false;toast(r.ok?'Added ✔ — they can sign in with their email':'Couldn’t add — try again');render(true);};
+ACT['inv-del']=el=>{const e=el.dataset.e;confirmSheet('Remove this person?','Remove',async()=>{await A.invite('x',e,true);toast('Removed');render(true);});};
 ACT['msg-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this message?','Delete',()=>{A.del(id);U.chatRefresh();});};
 document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='chatin'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();ACT['chat-send']();}});
 // keep my name on the member list so others can message me privately
@@ -440,7 +452,7 @@ A.pushSync=async function(){
   if(!meta.code||!pushOK()||Notification.permission!=='granted')return false;
   try{const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
     if(!sub){const k=(await (await fetch('/api/push?key')).json()).key;sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u2buf(k)});}
-    const r=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,sub:sub.toJSON(),dev:meta.dev,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined})});
+    const r=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.tok?undefined:meta.pin,tok:meta.tok||undefined,sub:sub.toJSON(),dev:meta.dev,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined})});
     const ok=r.ok;meta.pushOn=ok;meta.pushEp=sub.endpoint;persist();return ok;}catch(e){return false;}};
 ACT['push-on']=async()=>{
   if(!meta.code){toast('Connect the family space first');return;}

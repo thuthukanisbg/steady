@@ -1,6 +1,6 @@
 // POST /api/sync — merge-based sync of one family "space" (all records in a single JSON doc).
 // Each record: { id, type, ts, u (updated ms), del?, ...fields }. Newest `u` wins; deletes are tombstones.
-import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, MAX_MSGS, sha, validEmail } from './_lib/common.mjs';
+import { json, store, spaceKey, pinHash, validCreds, roleOf, FAMILY_WRITE, REACTIONS, MAX_PHOTOS, MAX_MSGS, sha, validEmail, inviteByTok, nameKey, ehash } from './_lib/common.mjs';
 import { pushSpace } from './_lib/push.mjs';
 
 // one-time clean slate for chat: on the first sync after this value changes, every existing message (group + private) is deleted
@@ -10,12 +10,13 @@ const PEOPLE_RESET = '2026-10-19-two-people'; // one-time: clear private chats +
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
-  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, who, ppin, join = false, email } = b || {};
-  if (!validCreds(code, pin)) return json({ error: 'bad_credentials' }, 400);
+  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, ppin, join = false, email, tok, invite } = b || {};
+  let who = b && b.who;
+  if (!validCreds(code, tok ? '0000' : pin)) return json({ error: 'bad_credentials' }, 400);
   if (vpin !== undefined && vpin !== null && !/^\d{4,8}$/.test(String(vpin))) return json({ error: 'bad_family_pin' }, 400);
 
   if (newPin !== undefined && newPin !== null && !/^\d{4,8}$/.test(String(newPin))) return json({ error: 'bad_pin' }, 400);
-  const st = store(), key = await spaceKey(code), ph = await pinHash(code, pin);
+  const st = store(), key = await spaceKey(code), ph = tok ? null : await pinHash(code, pin);
   // per-device author id (hash of a secret kept on the device) so people can delete only their own posts
   let me = typeof dev === 'string' && /^[a-f0-9]{16,64}$/.test(dev) ? (await sha('d:' + code + ':' + dev)).slice(0, 16) : null;
 
@@ -26,8 +27,9 @@ export default async (req) => {
       if (!create) return json({ error: 'not_found' }, 404);
       doc = { v: 1, pin: ph, vpin: null, seq: 0, epoch: 0, recs: {}, created: Date.now(), chatReset: CHAT_RESET, peopleReset: PEOPLE_RESET };
     }
-    const role = roleOf(doc, ph);
-    if (!role) return json({ error: 'wrong_pin' }, 401);
+    let role, iv = null;
+    if (tok) { iv = cur ? await inviteByTok(doc, code, tok) : null; role = iv ? 'viewer' : null; if (!role) return json({ error: 'session_expired' }, 401); who = iv.name; }
+    else { role = roleOf(doc, ph); if (!role) return json({ error: 'wrong_pin' }, 401); }
     doc.epoch = doc.epoch || 0;
     // a PIN was changed since this device logged in, so it must log in again
     if (typeof epoch === 'number' && epoch !== doc.epoch) return json({ error: 'session_expired' }, 401);
@@ -35,6 +37,7 @@ export default async (req) => {
     let changed = false, bump = false;
     // WHO is posting: her = one fixed identity on every device; family = their name + own PIN, so the same person on any phone/browser
     if (role === 'owner') me = (await sha('o:' + code)).slice(0, 16);
+    else if (iv) me = (await sha('u:' + code + ':' + nameKey(iv.name))).slice(0, 16);
     else if (typeof who === 'string' && who.trim()) {
       const nk = who.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40);
       if (!/^\d{4,8}$/.test(String(ppin || ''))) return json({ error: 'need_identity' }, 400);
@@ -57,6 +60,18 @@ export default async (req) => {
       const vh = await pinHash(code, String(vpin));
       if (vh === doc.pin) return json({ error: 'same_pin' }, 400);
       if (doc.vpin !== vh) { doc.vpin = vh; changed = true; if (cur) bump = true; }
+    }
+    let inviteIdx = null;
+    if (role === 'owner' && invite && typeof invite === 'object' && validEmail(String(invite.email || '').trim().toLowerCase())) {
+      const em = String(invite.email).trim().toLowerCase(), eh = await ehash(em);
+      doc.invites = doc.invites || {};
+      if (invite.del) { if (doc.invites[eh]) { delete doc.invites[eh]; changed = true; bump = true; inviteIdx = { eh, del: true }; } }
+      else {
+        const nm = String(invite.name || '').trim().slice(0, 40);
+        if (!nm) return json({ error: 'need_identity' }, 400);
+        if (!doc.invites[eh] && Object.keys(doc.invites).length >= 12) return json({ error: 'too_many' }, 400);
+        doc.invites[eh] = { name: nm, email: em, th: (doc.invites[eh] && doc.invites[eh].th) || [] }; changed = true; inviteIdx = { eh };
+      }
     }
     if (bump) doc.epoch++;
     if (doc.chatReset !== CHAT_RESET) {
@@ -102,6 +117,11 @@ export default async (req) => {
       const res = await st.setJSON(key, doc, cur ? { onlyIfMatch: cur.etag } : { onlyIfNew: true });
       if (res && res.modified === false) continue; // someone else wrote first — retry on fresh data
     }
+    if (inviteIdx) {
+      const ik = 'mail/' + inviteIdx.eh, ix = (await st.get(ik, { type: 'json' })) || { codes: [] };
+      ix.codes = ix.codes.filter(c => c !== code); if (!inviteIdx.del) ix.codes.push(code);
+      if (ix.codes.length) await st.setJSON(ik, ix); else await st.delete(ik);
+    }
     // private 1:1 messages are only ever sent to the two people in them (owner included — no one else can read them)
     // phone alerts for new chat messages: group -> everyone else; private -> only the person it is for (no text in the alert)
     if (newMsgs.length) await Promise.race([Promise.all(newMsgs.slice(0, 3).map(m => pushSpace(key, m.room === 'g'
@@ -115,7 +135,7 @@ export default async (req) => {
       for (const x of Object.values(doc.recs)) if (x.type === 'member' && !x.del && String(x.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === wn && /^mb_[a-f0-9]{16}$/.test(x.id)) mine.add(x.id.slice(3));
     }
     const out = Object.values(doc.recs).filter(r => (r.s > since || (r.type === 'msg' && r.room === 'd' && !r.del && mine.has(r.to) && r.to !== me)) && !(r.type === 'msg' && r.room === 'd' && !r.del && r.a !== me && !mine.has(r.to)));
-    return json({ ok: true, seq: doc.seq, records: out, now: Date.now(), role, hasFamilyPin: !!doc.vpin, epoch: doc.epoch, me });
+    return json({ ok: true, seq: doc.seq, records: out, now: Date.now(), role, hasFamilyPin: !!doc.vpin, epoch: doc.epoch, me, who: iv ? iv.name : undefined, invites: role === 'owner' ? Object.values(doc.invites || {}).map(i => ({ name: i.name, email: i.email })) : undefined });
   }
   return json({ error: 'busy' }, 409);
 };

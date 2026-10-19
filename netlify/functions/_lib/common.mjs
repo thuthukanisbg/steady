@@ -60,6 +60,14 @@ export const validEmail = e => typeof e === 'string' && /^[^@\s]+@[^@\s]+\.[^@\s
 
 /* ---- roles: owner PIN (full access) vs family PIN (view-only) ---- */
 export function roleOf(doc, ph) { return doc.pin === ph ? 'owner' : (doc.vpin && doc.vpin === ph ? 'viewer' : null); }
+/* ---- email sign-in: the owner invites people by email; they get a one-time code and a per-device token ---- */
+export const nameKey = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40);
+export const ehash = async e => (await sha('e:' + String(e || '').trim().toLowerCase())).slice(0, 24);
+export async function inviteByTok(doc, code, tok) {
+  if (typeof tok !== 'string' || !/^[a-f0-9]{32}$/.test(tok)) return null;
+  const th = await sha('t:' + code + ':' + tok);
+  return Object.values(doc.invites || {}).find(i => (i.th || []).includes(th)) || null;
+}
 export const FAMILY_WRITE = new Set(['note', 'follower', 'post', 'react', 'msg', 'member']);   // the only things view-only family may add/remove
 export const REACTIONS = ['❤️', '👏', '💪', '🙏', '😊'];
 export const MAX_PHOTOS = 20;
@@ -70,13 +78,15 @@ export function recipients(doc) {
   const add = (email, name) => { const e = String(email || '').trim().toLowerCase(); if (validEmail(e) && !seen.has(e)) { seen.add(e); out.push({ email: e, name: name || '' }); } };
   (s.carers || []).slice(0, 5).forEach(e => add(e, ''));
   Object.values(doc?.people || {}).forEach(x => add(x.email, x.name));
+  Object.values(doc?.invites || {}).forEach(x => add(x.email, x.name));
   Object.values(doc?.recs || {}).filter(r => r.type === 'follower' && !r.del).slice(0, 10).forEach(r => add(r.email, r.name));
   return out.slice(0, 20);
 }
 
 /* who is this request? (same rules as /api/sync) -> 16-hex author id, or null when it can't be verified */
-export async function identify(doc, role, code, { dev, who, ppin } = {}) {
+export async function identify(doc, role, code, { dev, who, ppin, tok } = {}) {
   if (role === 'owner') return (await sha('o:' + code)).slice(0, 16);
+  if (tok) { const iv = await inviteByTok(doc, code, tok); return iv ? (await sha('u:' + code + ':' + nameKey(iv.name))).slice(0, 16) : null; }
   if (typeof who === 'string' && who.trim() && /^\d{4,8}$/.test(String(ppin || ''))) {
     const nk = who.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40), px = doc.people?.[nk];
     if (px && px.h === await sha('q:' + code + ':' + nk + ':' + ppin)) return (await sha('u:' + code + ':' + nk)).slice(0, 16);

@@ -283,6 +283,9 @@ function pageMe(){
     <div class="item"><button class="switch ${c.email_reminders?'on':''}" data-act="tog" data-k="email_reminders" aria-label="Toggle"></button><div class="grow"><div class="t sm">Email her reminders when the app is closed</div></div></div>
     <label class="f">Alert family if no sugar check for (hours)</label><input class="inp" type="text" inputmode="decimal" data-set="miss_hours" data-num="1" value="${c.miss_hours}">`}
     <div class="disc">Emails need the sync space below. Reminder emails go out every 15 minutes at most; phone pop-ups need the app to have been opened recently.</div>`);
+  if(meta.code&&!ro){const iv=meta.invites||[];h+=sec('👨‍👩‍👧 Family members',`<div class="disc">Add each person by email. They sign in with a code sent to that email — no PIN to remember — and can see everything but not edit.</div>
+    ${iv.map(i=>`<div class="item"><div class="grow"><div class="t">${esc(i.name)}</div><div class="d">${esc(i.email)}</div></div><button class="btn ghost sm" data-act="inv-del" data-e="${esc(i.email)}">Remove</button></div>`).join('')}
+    <label class="f">Name</label><input class="inp" id="invname" placeholder="e.g. Raymond" autocomplete="off"><label class="f">Email</label><input class="inp" id="invemail" type="email" placeholder="name@example.com" autocomplete="off"><button class="btn primary block mt" data-act="inv-add">Add person</button>`,true);}
   h+=sec('🔗 Family sync',meta.code?`<div class="banner good"><div class="b">✅ Connected</div><div class="sm">${syncLabel()}</div></div>
       <label class="f">Family code</label><div class="inp row" style="font-weight:800;letter-spacing:.06em">${esc(meta.code)}</div>
       ${ro?`<div class="disc">You’re connected with the family (view-only) PIN.</div>`:`<label class="f">Her PIN (full access — keep private)</label><div class="inp row between"><span id="pinshow">••••</span><button class="linkish sm" data-act="show-pin">Show</button></div>

@@ -344,7 +344,7 @@ A.doSync=async function(opts={}){
   const sentU={}; const out=[];
   Object.keys(meta.pending).forEach(id=>{ if(recs[id]){sentU[id]=recs[id].u; out.push(recs[id]);} else delete meta.pending[id]; });
   try{
-    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:meta.ppin?meta.who:undefined,ppin:meta.ppin||undefined,email:meta.ppin?(meta.email||undefined):undefined,join:!!opts.joining})});
+    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.tok?undefined:meta.pin,tok:meta.tok||undefined,invite:opts.invite||undefined,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:(meta.ppin&&!meta.tok)?meta.who:undefined,ppin:meta.tok?undefined:(meta.ppin||undefined),email:(meta.ppin&&!meta.tok)?(meta.email||undefined):undefined,join:!!opts.joining})});
     const j=await res.json().catch(()=>({}));
     if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.',need_identity:'Enter your name and your own PIN below (family only).',need_email:'Enter your email below — it is used for emergency alerts and resetting your PIN.',name_taken:'That name is already used with a different personal PIN. Enter your own PIN, or use another name.',too_many:'Too many people in this space.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
     let newCrit=[];
@@ -353,7 +353,7 @@ A.doSync=async function(opts={}){
       if(!cur||r.u>cur.u){ const {s,...rest}=r; recs[r.id]=rest; if(!cur&&r.type==='glucose'&&!r.del&&r.by!==meta.who&&now()-r.ts<45*MIN&&gstat(r.v)!=='ok') newCrit.push(rest); }
     });
     Object.keys(sentU).forEach(id=>{ if(recs[id]&&recs[id].u===sentU[id]) delete meta.pending[id]; });
-    if(typeof j.epoch==='number') meta.epoch=j.epoch; if(j.me) meta.me=j.me; if(opts.newPin) meta.pin=opts.newPin;
+    if(j.who&&meta.tok) meta.who=j.who; if(j.invites) meta.invites=j.invites; else if(j.role==='owner') meta.invites=[]; if(typeof j.epoch==='number') meta.epoch=j.epoch; if(j.me) meta.me=j.me; if(opts.newPin) meta.pin=opts.newPin;
     if(j.role){ meta.ro=j.role==='viewer'; if(meta.ro) meta.role='carer'; meta.hasFamilyPin=!!j.hasFamilyPin; if(opts.vpin) meta.vpin=opts.vpin; }
     meta.seq=j.seq; persist(); sync.last=now(); setSync('on');
     if(newCrit.length&&A.onRemoteAlert) A.onRemoteAlert(newCrit);
@@ -387,7 +387,17 @@ A.joinSpace=async function(code,pin,create,vpin,ident){
 A.leaveSpace=function(){
   // a view-only phone keeps no copy of her data once it is logged out
   if(meta.ro){ Object.keys(recs).forEach(k=>delete recs[k]); meta.pending={}; }
-  meta.lastCode=meta.code||meta.lastCode||'';meta.pushOn=false;meta.pushSynced=0;meta.lastWho=meta.ro?meta.who:meta.lastWho;meta.ppin='';meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
+  meta.lastCode=meta.code||meta.lastCode||'';meta.pushOn=false;meta.pushSynced=0;meta.lastWho=meta.ro?meta.who:meta.lastWho;meta.ppin='';meta.tok='';meta.invites=undefined;meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};
+A.emailStart=async function(email){try{const r=await fetch('/api/otp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'start',email})});return r.ok;}catch(e){return false;}};
+A.emailVerify=async function(email,otp){
+  let j;try{const r=await fetch('/api/otp',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'verify',email,otp})});j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)return {ok:false,msg:'That code didn’t work — check it, or ask for a new one.'};}catch(e){return {ok:false,msg:'No connection — try again.'};}
+  Object.keys(recs).forEach(k=>delete recs[k]);
+  meta.code=j.code;meta.tok=j.tok;meta.who=j.name;meta.lastWho=j.name;meta.pin='';meta.ppin='';meta.seq=0;meta.epoch=undefined;meta.me='';meta.pending={};meta.ro=true;meta.role='carer';meta.onboarded=true;meta.lastCode=j.code;persist();
+  const r=await A.doSync({joining:true});
+  if(!r.ok){meta.code='';meta.tok='';persist();setSync('off');return {ok:false,msg:(r.error&&r.error.message)||'Could not connect'};}
+  return {ok:true};
+};
+A.invite=async function(name,email,del){const r=await A.doSync({invite:{name,email,del:!!del}});return r;};
 A.genCode=function(){const al='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(12);crypto.getRandomValues(b);const s=[...b].map(x=>al[x%al.length]).join('');return s.slice(0,4)+'-'+s.slice(4,8)+'-'+s.slice(8,12);};
 A.notifyServer=function(rec){
   if(!meta.code||!cfg().email_alerts) return;
