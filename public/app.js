@@ -467,4 +467,7 @@ ACT['rs-confirm']=async el=>{const R=rsRead(),err=$('#rserr'),c=($('#rcode6').va
     if(j.ok){meta.lastCode=R.code;if(R.kind==='family')meta.lastWho=R.name;persist();R.step='done';setBody(resetHtml());}
     else{el.disabled=false;el.textContent='Set new PIN';err.textContent=j.error==='same_pin'?'Her PIN must differ from the family PIN.':'That code is wrong or has expired. Request a new one.';}
   }catch(e){el.disabled=false;el.textContent='Set new PIN';err.textContent='No connection. Try again.';}};
+/* auto-update: when a new version of the app is installed, reload once the person is not typing */
+if('serviceWorker' in navigator){let had=!!navigator.serviceWorker.controller,done=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had){had=true;return;}if(done)return;done=true;const go=()=>{const ae=document.activeElement;if(($('#sheet')&&$('#sheet').classList.contains('open'))||(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName))){setTimeout(go,4000);return;}location.reload();};go();});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{});});}
 })();

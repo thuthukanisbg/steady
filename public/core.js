@@ -394,7 +394,9 @@ A.notifyServer=function(rec){
   const st=gstat(rec.v); if(st==='ok'||st==='high') return;
   fetch('/api/notify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.pin,ep:meta.pushEp||undefined,kind:'reading',id:rec.id,v:rec.v,ts:rec.ts,ctx:rec.ctx||'',by:rec.by||''})}).catch(()=>{});
 };
-setInterval(()=>{ if(meta.code&&document.visibilityState==='visible') A.doSync(); },25000);
+setInterval(()=>{ if(meta.code&&document.visibilityState==='visible') A.doSync(); },10000);
+window.addEventListener('focus',()=>{ if(meta.code) A.doSync(); });
+window.addEventListener('pageshow',()=>{ if(meta.code) A.doSync(); });
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&meta.code) A.doSync(); });
 window.addEventListener('online',()=>{ if(meta.code) A.doSync(); });
 
