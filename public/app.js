@@ -334,7 +334,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable','call','call-accept','call-decline','call-end','call-mute','call-cam','otp-send','otp-go']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -386,7 +386,7 @@ ACT['chat-back']=()=>{U.room=null;render();};
 ACT['chat-send']=()=>{const t=$('#chatin'),v=(t.value||'').trim();if(!v)return;
   const r=U.room;if(r==='g')put({type:'msg',room:'g',text:v.slice(0,1000)});else put({type:'msg',room:'d',to:r,text:v.slice(0,1000)});
   t.value='';U.markSeen(r);U.chatRefresh();t.focus();};
-ACT['call']=async el=>{const kind=el.dataset.v,r=U.room;if(!r||!meta.code)return;
+ACT['call']=async el=>{const kind=el.dataset.v,r=U.room;if(!r||!meta.code)return;if(r!=='g'){startCall(kind,r);return;}
   const ids=r==='g'?['g']:[meta.me,r].sort(),buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('call:'+meta.code+':'+ids.join(':')));
   const h=[...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,20),url='https://meet.jit.si/Steady'+h+(kind==='voice'?'#config.startWithVideoMuted=true':'');
   const txt=(kind==='voice'?'📞 Voice call — tap to join: ':'🎥 Video call — tap to join: ')+url;
@@ -395,7 +395,7 @@ ACT['call']=async el=>{const kind=el.dataset.v,r=U.room;if(!r||!meta.code)return
 ACT['otp-send']=async el=>{const em=(($('#oemail')||{}).value||'').trim().toLowerCase(),err=$('#otperr');if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)){err.textContent='That email doesn’t look right.';return;}
   el.disabled=true;err.style.color='var(--mut)';err.textContent='Sending…';const ok=await A.emailStart(em);el.disabled=false;
   if(!ok){err.style.color='var(--crit-low)';err.textContent='No connection — try again.';return;}
-  meta.lastEmail=em;persist();$('#otpbox').style.display='block';err.textContent='If that email was added by the owner, a code is on its way (check spam too).';setTimeout(()=>{const c=$('#ocode');c&&c.focus();},50);};
+  meta.lastEmail=em;persist();$('#otpbox').style.display='block';err.textContent='If that email was added by the owner, a code is on its way (check spam too). No code? Ask the owner to add you under Profile → Family members.';setTimeout(()=>{const c=$('#ocode');c&&c.focus();},50);};
 ACT['otp-go']=async el=>{const em=(($('#oemail')||{}).value||'').trim().toLowerCase(),c=(($('#ocode')||{}).value||'').trim(),err=$('#otperr');if(!/^\d{6}$/.test(c)){err.style.color='var(--crit-low)';err.textContent='Enter the 6-digit code.';return;}
   el.disabled=true;el.textContent='Signing in…';const r=await A.emailVerify(em,c);
   if(!r.ok){el.disabled=false;el.textContent='Sign in';err.style.color='var(--crit-low)';err.textContent=r.msg;return;}
@@ -488,4 +488,70 @@ ACT['rs-confirm']=async el=>{const R=rsRead(),err=$('#rserr'),c=($('#rcode6').va
 /* auto-update: when a new version of the app is installed, reload once the person is not typing */
 if('serviceWorker' in navigator){let had=!!navigator.serviceWorker.controller,done=false;navigator.serviceWorker.addEventListener('controllerchange',()=>{if(!had){had=true;return;}if(done)return;done=true;const go=()=>{const ae=document.activeElement;if(($('#sheet')&&$('#sheet').classList.contains('open'))||(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName))){setTimeout(go,4000);return;}location.reload();};go();});
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{});});}
+
+/* ---------------- in-app calling (WebRTC; the audio/video goes phone to phone over data) ---------------- */
+const CALL={pc:null,id:null,side:'',stream:null,poll:null,seen:0,state:'idle',kind:'voice',peer:'',pend:[],ice:null,answered:false,t0:0,tick:null,inc:null,ring:null,muted:false,camOff:false};
+A.callState=CALL;
+const callBody=x=>Object.assign({code:meta.code,pin:meta.tok?undefined:meta.pin,tok:meta.tok||undefined,dev:meta.dev,who:(meta.ppin&&!meta.tok)?meta.who:undefined,ppin:meta.tok?undefined:(meta.ppin||undefined)},x);
+const callApi=async x=>{try{const r=await fetch('/api/call',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(callBody(x))});const j=await r.json().catch(()=>({}));j._s=r.status;return j;}catch(e){return {error:'net'};}};
+async function iceServers(){if(!CALL.ice){const j=await callApi({action:'turn'});CALL.ice=[{urls:['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302']}].concat(j.ice||[]);}return CALL.ice;}
+function callUI(html){let el=document.getElementById('callui');if(!el){el=document.createElement('div');el.id='callui';document.body.appendChild(el);}el.innerHTML=html;el.style.display='flex';}
+function callHide(){const el=document.getElementById('callui');if(el){el.style.display='none';el.innerHTML='';}}
+const fmtT=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+function showCall(st,msg){
+  const vid=CALL.kind==='video';
+  const stage=vid?`<video id="rv" autoplay playsinline class="rv"></video><video id="lv" autoplay playsinline muted class="lv"></video>`:`<div class="cav">${esc((CALL.peer||'?').slice(0,1).toUpperCase())}</div>`;
+  const ctl=st==='in'?`<button class="cbtn" data-act="call-mute" aria-label="Mute">${CALL.muted?'🔇':'🎤'}</button>${vid?`<button class="cbtn" data-act="call-cam" aria-label="Camera">${CALL.camOff?'🚫':'📷'}</button>`:''}<button class="cbtn end" data-act="call-end" aria-label="End call">⏹</button>`
+    :st==='ring'?`<button class="cbtn end" data-act="call-decline" aria-label="Decline">✖</button><button class="cbtn ok" data-act="call-accept" aria-label="Answer">📞</button>`
+    :`<button class="cbtn end" data-act="call-end" aria-label="Cancel">⏹</button>`;
+  callUI(`<div class="cwrap">${stage}<div class="cname">${esc(CALL.peer||'')}</div><div class="cst" id="cst">${esc(msg||'')}</div></div><div class="cbar">${ctl}</div><audio id="ra" autoplay></audio>`);
+  const lv=document.getElementById('lv');if(lv&&CALL.stream)lv.srcObject=CALL.stream;
+  const rv=document.getElementById('rv')||document.getElementById('ra');if(rv&&CALL.remote)rv.srcObject=CALL.remote;
+}
+async function getMedia(kind){CALL.stream=await navigator.mediaDevices.getUserMedia({audio:true,video:kind==='video'?{facingMode:'user'}:false});}
+async function makePc(){
+  const pc=new RTCPeerConnection({iceServers:await iceServers()});CALL.pc=pc;CALL.remote=null;CALL.seen=0;CALL.answered=false;
+  CALL.stream.getTracks().forEach(t=>pc.addTrack(t,CALL.stream));
+  pc.onicecandidate=e=>{if(!e.candidate)return;const c=JSON.stringify(e.candidate);if(CALL.id)callApi({action:'ice',id:CALL.id,cand:c});else CALL.pend.push(c);};
+  pc.ontrack=e=>{CALL.remote=e.streams[0];const el=document.getElementById('rv')||document.getElementById('ra');if(el){el.srcObject=CALL.remote;const p=el.play&&el.play();if(p&&p.catch)p.catch(()=>{});}};
+  pc.onconnectionstatechange=()=>{if(!CALL.pc)return;if(pc.connectionState==='connected'&&CALL.state!=='in'){CALL.state='in';CALL.t0=Date.now();stopRing();showCall('in','');clearInterval(CALL.tick);CALL.tick=setInterval(()=>{const e=document.getElementById('cst');if(e)e.textContent=fmtT(Math.floor((Date.now()-CALL.t0)/1000));},1000);}
+    if(pc.connectionState==='failed')callEnd('The call dropped — check your connection',true);};
+}
+function flushIce(){const l=CALL.pend.splice(0);l.forEach(c=>callApi({action:'ice',id:CALL.id,cand:c}));}
+function callCleanup(){clearInterval(CALL.poll);clearInterval(CALL.tick);stopRing();try{CALL.stream&&CALL.stream.getTracks().forEach(t=>t.stop());}catch(e){}try{CALL.pc&&CALL.pc.close();}catch(e){}
+  Object.assign(CALL,{pc:null,stream:null,remote:null,id:null,state:'idle',pend:[],inc:null,muted:false,camOff:false,answered:false,seen:0});callHide();}
+function callEnd(msg,tell){const id=CALL.id;if(tell!==false&&id)callApi({action:'end',id});callCleanup();if(msg)toast(msg);}
+function startPoll(){clearInterval(CALL.poll);CALL.poll=setInterval(async()=>{
+  if(!CALL.id||!CALL.pc)return;const r=await callApi({action:'poll',id:CALL.id});if(!CALL.pc)return;
+  const c=r.call;if(!c){if(r._s===200||r._s===404){callEnd('Call ended',false);}return;}
+  if(c.state==='ended'){const w={noanswer:'No answer',declined:'Call declined',cancelled:'Call ended',hangup:'Call ended'}[c.why]||'Call ended';callEnd(w,false);return;}
+  try{if(CALL.side==='a'&&c.answer&&!CALL.answered){CALL.answered=true;await CALL.pc.setRemoteDescription(JSON.parse(c.answer));}
+    if(CALL.pc.remoteDescription){const l=c.ice[CALL.side==='a'?'b':'a']||[];while(CALL.seen<l.length){const x=l[CALL.seen++];try{await CALL.pc.addIceCandidate(JSON.parse(x));}catch(e){}}}}catch(e){}
+},1000);}
+async function startCall(kind,to){
+  if(CALL.state!=='idle')return;
+  if(!navigator.mediaDevices||!window.RTCPeerConnection){toast('Calling isn’t supported on this browser');return;}
+  const pm=A.recs()['mb_'+to];CALL.state='out';CALL.kind=kind;CALL.side='a';CALL.peer=(pm&&pm.name)||'Family';CALL.id=null;CALL.pend=[];
+  showCall('out','Calling…');
+  try{await getMedia(kind);showCall('out','Calling…');await makePc();const off=await CALL.pc.createOffer();await CALL.pc.setLocalDescription(off);
+    const r=await callApi({action:'start',to,kind,offer:JSON.stringify(off)});
+    if(!r.ok){callEnd(r.error==='busy'?'They’re on another call':'Couldn’t start the call',false);return;}
+    CALL.id=r.id;flushIce();startPoll();
+    setTimeout(()=>{if(CALL.state==='out'&&CALL.id===r.id){const e=document.getElementById('cst');if(e)e.textContent='Ringing…';}},1500);
+  }catch(e){callEnd(e&&e.name==='NotAllowedError'?'Allow the microphone (and camera) to call':'Couldn’t start the call',false);}
+}
+function ringStart(){stopRing();const beep=()=>{try{navigator.vibrate&&navigator.vibrate([400,200,400]);const ac=CALL.ac||(CALL.ac=new (window.AudioContext||window.webkitAudioContext)());const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=440;g.gain.value=.15;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.4);}catch(e){}};beep();CALL.ring=setInterval(beep,2200);}
+function stopRing(){clearInterval(CALL.ring);CALL.ring=null;}
+function showIncoming(c){if(CALL.state!=='idle')return;CALL.state='ring';CALL.inc=c;CALL.kind=c.kind;CALL.peer=c.fromName;CALL.side='b';CALL.id=c.id;showCall('ring',c.kind==='video'?'Video call…':'Voice call…');ringStart();
+  CALL.poll=setInterval(async()=>{const r=await callApi({action:'poll',id:CALL.id});const x=r.call;if(!x||x.state!=='ringing'){if(CALL.state==='ring')callEnd('Missed call from '+c.fromName,false);}},1500);}
+ACT['call-accept']=async()=>{const c=CALL.inc;if(!c)return;clearInterval(CALL.poll);stopRing();CALL.state='in-pending';showCall('out','Connecting…');
+  try{await getMedia(c.kind);await makePc();await CALL.pc.setRemoteDescription(JSON.parse(c.offer));const ans=await CALL.pc.createAnswer();await CALL.pc.setLocalDescription(ans);
+    const r=await callApi({action:'answer',id:c.id,answer:JSON.stringify(ans)});if(!r.ok){callEnd('That call has ended',false);return;}
+    flushIce();startPoll();}catch(e){callEnd(e&&e.name==='NotAllowedError'?'Allow the microphone (and camera) to answer':'Couldn’t connect the call');}};
+ACT['call-decline']=()=>callEnd('');
+ACT['call-end']=()=>callEnd('Call ended');
+ACT['call-mute']=()=>{CALL.muted=!CALL.muted;CALL.stream&&CALL.stream.getAudioTracks().forEach(t=>t.enabled=!CALL.muted);showCall('in','');};
+ACT['call-cam']=()=>{CALL.camOff=!CALL.camOff;CALL.stream&&CALL.stream.getVideoTracks().forEach(t=>t.enabled=!CALL.camOff);showCall('in','');};
+async function checkIncoming(){if(CALL.state!=='idle'||!meta.code||!meta.me||document.visibilityState!=='visible')return;const r=await callApi({action:'poll'});if(r.call&&CALL.state==='idle')showIncoming(r.call);}
+setInterval(checkIncoming,3000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkIncoming();});window.addEventListener('focus',checkIncoming);
 })();

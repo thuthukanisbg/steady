@@ -260,3 +260,13 @@ button.card{font:inherit;color:inherit}
 .sosbtn span{font-size:30px}.sosbtn small{font-size:12px;font-weight:600;opacity:.9}
 .sosbtn:active{transform:scale(.98)}
 .sosb{margin-bottom:12px}.sosb .btn{text-decoration:none}
+
+#callui{position:fixed;inset:0;z-index:99999;background:#07161a;color:#fff;flex-direction:column;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 40px) 20px calc(env(safe-area-inset-bottom) + 34px)}
+#callui .cwrap{flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;position:relative}
+#callui .cav{width:120px;height:120px;border-radius:50%;background:#1f6f63;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:800}
+#callui .cname{font-size:26px;font-weight:800;z-index:2;text-shadow:0 1px 6px rgba(0,0,0,.6)}#callui .cst{font-size:16px;opacity:.85;z-index:2;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+#callui .rv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:18px;background:#000}
+#callui .lv{position:absolute;right:8px;bottom:8px;width:96px;height:128px;object-fit:cover;border-radius:12px;background:#000;border:2px solid #fff3;z-index:3}
+#callui .cbar{display:flex;gap:26px;align-items:center;justify-content:center;padding-top:16px}
+#callui .cbtn{width:68px;height:68px;border-radius:50%;border:0;font-size:28px;background:#ffffff22;color:#fff;cursor:pointer}
+#callui .cbtn.end{background:#d6303a}#callui .cbtn.ok{background:#2bb673}
