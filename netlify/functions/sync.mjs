@@ -5,6 +5,7 @@ import { pushSpace } from './_lib/push.mjs';
 
 // one-time clean slate for chat: on the first sync after this value changes, every existing message (group + private) is deleted
 const CHAT_RESET = '2026-10-14-clean-start';
+const PEOPLE_RESET = '2026-10-19-two-people'; // one-time: clear private chats + stale chat members (active people re-appear when they open the app)
 
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -23,7 +24,7 @@ export default async (req) => {
     let doc = cur ? cur.data : null;
     if (!doc) {
       if (!create) return json({ error: 'not_found' }, 404);
-      doc = { v: 1, pin: ph, vpin: null, seq: 0, epoch: 0, recs: {}, created: Date.now(), chatReset: CHAT_RESET };
+      doc = { v: 1, pin: ph, vpin: null, seq: 0, epoch: 0, recs: {}, created: Date.now(), chatReset: CHAT_RESET, peopleReset: PEOPLE_RESET };
     }
     const role = roleOf(doc, ph);
     if (!role) return json({ error: 'wrong_pin' }, 401);
@@ -61,6 +62,10 @@ export default async (req) => {
     if (doc.chatReset !== CHAT_RESET) {
       for (const x of Object.values(doc.recs)) if (x.type === 'msg' && !x.del) doc.recs[x.id] = { id: x.id, type: 'msg', del: 1, ts: x.ts, u: Date.now(), s: ++doc.seq };
       doc.chatReset = CHAT_RESET; changed = true;
+    }
+    if (doc.peopleReset !== PEOPLE_RESET) {
+      for (const x of Object.values(doc.recs)) if (!x.del && (x.type === 'member' || (x.type === 'msg' && x.room === 'd'))) doc.recs[x.id] = { id: x.id, type: x.type, del: 1, ts: x.ts, u: Date.now(), s: ++doc.seq };
+      doc.peopleReset = PEOPLE_RESET; changed = true;
     }
     const newMsgs = [];
     let followers = Object.values(doc.recs).filter(x => x.type === 'follower' && !x.del).length;

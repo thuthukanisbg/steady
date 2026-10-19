@@ -385,10 +385,16 @@ ACT['chat-back']=()=>{U.room=null;render();};
 ACT['chat-send']=()=>{const t=$('#chatin'),v=(t.value||'').trim();if(!v)return;
   const r=U.room;if(r==='g')put({type:'msg',room:'g',text:v.slice(0,1000)});else put({type:'msg',room:'d',to:r,text:v.slice(0,1000)});
   t.value='';U.markSeen(r);U.chatRefresh();t.focus();};
+ACT['call']=async el=>{const kind=el.dataset.v,r=U.room;if(!r||!meta.code)return;
+  const ids=r==='g'?['g']:[meta.me,r].sort(),buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('call:'+meta.code+':'+ids.join(':')));
+  const h=[...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('').slice(0,20),url='https://meet.jit.si/Steady'+h+(kind==='voice'?'#config.startWithVideoMuted=true':'');
+  const txt=(kind==='voice'?'📞 Voice call — tap to join: ':'🎥 Video call — tap to join: ')+url;
+  if(r==='g')put({type:'msg',room:'g',text:txt});else put({type:'msg',room:'d',to:r,text:txt});
+  U.markSeen(r);U.chatRefresh();window.open(url,'_blank','noopener');};
 ACT['msg-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this message?','Delete',()=>{A.del(id);U.chatRefresh();});};
 document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='chatin'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();ACT['chat-send']();}});
 // keep my name on the member list so others can message me privately
-function ensureMember(){if(!meta.code||!meta.me)return;const nm=meta.who||(meta.role==='carer'?'Family':(cfg().name||'Her')),id='mb_'+meta.me,cur=A.recs()[id];
+function ensureMember(){if(!meta.code||!meta.me)return;const nm=meta.ro?(meta.who||'Family'):(cfg().name||'Thembeka'),id='mb_'+meta.me,cur=A.recs()[id];
   const role=meta.ro?'family':'her';if(!cur||cur.del||cur.by!==nm||cur.name!==nm||cur.role!==role)put({id,type:'member',name:nm,role,by:nm});}
 A.sync.listeners.push(()=>{try{ensureMember()}catch(e){}});
 // poll faster while the chat is open
