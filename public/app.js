@@ -334,7 +334,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable','call','call-accept','call-decline','call-end','call-mute','call-cam','otp-send','otp-go']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable','quote-next','call','call-accept','call-decline','call-end','call-mute','call-cam','otp-send','otp-go']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -403,6 +403,7 @@ ACT['otp-go']=async el=>{const em=(($('#oemail')||{}).value||'').trim().toLowerC
 ACT['inv-add']=async el=>{const n=(($('#invname')||{}).value||'').trim(),e=(($('#invemail')||{}).value||'').trim().toLowerCase();if(!n||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)){toast('Add a name and a valid email');return;}
   el.disabled=true;const r=await A.invite(n,e,false);el.disabled=false;toast(r.ok?'Added ✔ — they can sign in with their email':'Couldn’t add — try again');render(true);};
 ACT['inv-del']=el=>{const e=el.dataset.e;confirmSheet('Remove this person?','Remove',async()=>{await A.invite('x',e,true);toast('Removed');render(true);});};
+ACT['quote-next']=()=>{const d=new Date(),day=Math.floor(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())/864e5);meta.qn=(meta.qd===day?(meta.qn||0):0)+1;meta.qd=day;persist();render(true);};
 ACT['msg-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this message?','Delete',()=>{A.del(id);U.chatRefresh();});};
 document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='chatin'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();ACT['chat-send']();}});
 // keep my name on the member list so others can message me privately

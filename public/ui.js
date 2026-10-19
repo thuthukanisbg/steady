@@ -48,12 +48,77 @@ function guideCard(st,ctx){
 U.guideCard=guideCard; U.heroCard=heroCard;
 
 /* ---------------- HOME ---------------- */
+const QUOTES=[
+  ["Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee.","Isaiah 41:10"],
+  ["I can do all things through Christ which strengtheneth me.","Philippians 4:13"],
+  ["God is our refuge and strength, a very present help in trouble.","Psalm 46:1"],
+  ["Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.","Joshua 1:9"],
+  ["My help cometh from the LORD, which made heaven and earth.","Psalm 121:2"],
+  ["They that wait upon the LORD shall renew their strength; they shall run, and not be weary; and they shall walk, and not faint.","Isaiah 40:31"],
+  ["I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.","Jeremiah 29:11"],
+  ["The LORD is my shepherd; I shall not want.","Psalm 23:1"],
+  ["The LORD is nigh unto them that are of a broken heart.","Psalm 34:18"],
+  ["Come unto me, all ye that labour and are heavy laden, and I will give you rest.","Matthew 11:28"],
+  ["The LORD is my light and my salvation; whom shall I fear? the LORD is the strength of my life.","Psalm 27:1"],
+  ["He will not fail thee, nor forsake thee.","Deuteronomy 31:6"],
+  ["Weeping may endure for a night, but joy cometh in the morning.","Psalm 30:5"],
+  ["My grace is sufficient for thee: for my strength is made perfect in weakness.","2 Corinthians 12:9"],
+  ["God is the strength of my heart, and my portion for ever.","Psalm 73:26"],
+  ["Trust in the LORD with all thine heart; and lean not unto thine own understanding.","Proverbs 3:5"],
+  ["The LORD is my strength and my shield; my heart trusted in him, and I am helped.","Psalm 28:7"],
+  ["His compassions fail not. They are new every morning: great is thy faithfulness.","Lamentations 3:22-23"],
+  ["Casting all your care upon him; for he careth for you.","1 Peter 5:7"],
+  ["This is the day which the LORD hath made; we will rejoice and be glad in it.","Psalm 118:24"],
+  ["When thou passest through the waters, I will be with thee.","Isaiah 43:2"],
+  ["What time I am afraid, I will trust in thee.","Psalm 56:3"],
+  ["God hath not given us the spirit of fear; but of power, and of love, and of a sound mind.","2 Timothy 1:7"],
+  ["In the day when I cried thou answeredst me, and strengthenedst me with strength in my soul.","Psalm 138:3"],
+  ["Let us not be weary in well doing: for in due season we shall reap, if we faint not.","Galatians 6:9"],
+  ["The peace of God, which passeth all understanding, shall keep your hearts and minds through Christ Jesus.","Philippians 4:7"],
+  ["The LORD shall fight for you, and ye shall hold your peace.","Exodus 14:14"],
+  ["Commit thy way unto the LORD; trust also in him; and he shall bring it to pass.","Psalm 37:5"],
+  ["Strength and honour are her clothing; and she shall rejoice in time to come.","Proverbs 31:25"],
+  ["I am fearfully and wonderfully made: marvellous are thy works.","Psalm 139:14"],
+  ["I have set the LORD always before me: because he is at my right hand, I shall not be moved.","Psalm 16:8"],
+  ["Beloved, I wish above all things that thou mayest prosper and be in health, even as thy soul prospereth.","3 John 1:2"],
+  ["You don’t have to be perfect today. You just have to keep showing up.",""],
+  ["One steady choice at a time. That’s how big things change.",""],
+  ["A high or low number is information, not a verdict on you.",""],
+  ["You are doing something hard every single day — and you’re still here. That’s strength.",""],
+  ["Small, kind habits beat big, perfect plans.",""],
+  ["Rest is part of the plan too. Be gentle with yourself today.",""],
+  ["Every check, every meal you think about, every walk — it all counts.",""],
+  ["Your family is in your corner. You never carry this alone.",""],
+  ["Progress isn’t a straight line. Keep going.",""],
+  ["Drink some water, take a breath, and take the next good step.",""],
+  ["You’ve handled every hard day so far. Today is no different.",""],
+  ["Look after yourself the way you’d look after someone you love.",""],
+  ["Steady wins. Slow, calm and consistent is a powerful way to live.",""],
+  ["A walk after a meal is a gift to your future self.",""],
+  ["Be proud of the effort, not just the number.",""],
+  ["Today is a fresh page. Write something kind on it.",""],
+  ["You are stronger than your worst day and braver than you feel.",""],
+  ["Celebrate the small wins — they add up to a healthy life.",""],
+  ["It’s okay to ask for help. That’s what family is for.",""],
+  ["Take it one meal, one check, one day at a time.",""],
+  ["You deserve to feel well. Keep taking care of you.",""],
+  ["Courage is not the absence of fear — it’s checking anyway.",""],
+  ["Good days build confidence; hard days build resilience. Both make you stronger.",""],
+  ["Breathe. You’re doing better than you think.",""],
+  ["Your story isn’t defined by a diagnosis. It’s defined by how you live.",""],
+  ["Be patient with your body. It’s working hard for you.",""],
+  ["Joy counts as medicine too — laugh, sing, call someone you love.",""],
+  ["You are loved, you are capable, and you are not alone.",""]
+];
+function quoteCard(){const d=new Date(),day=Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()))/864e5),n=(meta.qn&&meta.qd===day)?meta.qn:0,i=(day*7+n*13)%QUOTES.length,qt=QUOTES[i];
+  return `<div class="card quote"><div class="qk">${qt[1]?'📖 Today’s verse':'💛 Today’s note'}</div><div class="qt">“${esc(qt[0])}”</div>${qt[1]?`<div class="qr">— ${esc(qt[1])}</div>`:''}<button class="linkish sm" data-act="quote-next">Another one ›</button></div>`;}
 function pageHome(){
   const c=cfg(), g=list('glucose'), last=g[0], carer=meta.role==='carer', t=A.today(), gm=A.game();
   const hr=new Date().getHours(), greet=hr<12?'Good morning':hr<17?'Good afternoon':'Good evening', nm=c.name?esc(c.name):'';
   let h=top(carer?(nm?nm+'’s day':'Her day'):`${greet}${nm?', '+nm:''}`,new Date().toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long'}));
   h+='<div class="stack">';
   h+=heroCard(g);
+  h+=quoteCard();
   if(!meta.ro&&!carer) h+=`<button class="sosbtn" data-act="sos"><span>🆘</span> I need help<small>Alerts your family with your location</small></button>`;
   if(meta.recheck>now()) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Recheck in <span data-cd="recheck">${cd(meta.recheck)}</span></h3><div class="sm">Wait the full 15 minutes before testing again.</div></div><button class="btn sm white" data-act="add" data-v="glucose">Log</button></div></div>`;
   else if(meta.recheck) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Time to recheck!</h3><div class="sm">15 minutes are up — test and log your sugar.</div></div><button class="btn sm primary" data-act="add" data-v="glucose">Log</button></div></div>`;

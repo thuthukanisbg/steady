@@ -270,3 +270,8 @@ button.card{font:inherit;color:inherit}
 #callui .cbar{display:flex;gap:26px;align-items:center;justify-content:center;padding-top:16px}
 #callui .cbtn{width:68px;height:68px;border-radius:50%;border:0;font-size:28px;background:#ffffff22;color:#fff;cursor:pointer}
 #callui .cbtn.end{background:#d6303a}#callui .cbtn.ok{background:#2bb673}
+
+.quote{background:linear-gradient(135deg,rgba(43,182,115,.14),rgba(31,111,99,.10));border:1px solid rgba(43,182,115,.25)}
+.quote .qk{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75}
+.quote .qt{font-family:'Fraunces',Georgia,serif;font-size:19px;line-height:1.35;margin:8px 0 4px}
+.quote .qr{font-size:13px;opacity:.8;margin-bottom:6px}
