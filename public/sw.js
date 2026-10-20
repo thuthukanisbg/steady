@@ -1,5 +1,5 @@
 /* Steady service worker: offline shell + notification tap handling. Bump VERSION on each release. */
-const VERSION = 'steady-v19';
+const VERSION = 'steady-v20';
 const SHELL = ['/', '/index.html', '/styles.css', '/data.js', '/core.js', '/ui.js', '/app.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -25,9 +25,10 @@ self.addEventListener('fetch', e => {
 });
 self.addEventListener('notificationclick', e => {
   e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-    for (const c of cs) { if ('focus' in c) return c.focus(); }
-    return self.clients.openWindow('/');
+    for (const c of cs) { if ('focus' in c) { try { c.postMessage({ go: url }); } catch (err) {} return c.focus(); } }
+    return self.clients.openWindow(url);
   }));
 });
 
@@ -43,6 +44,6 @@ self.addEventListener('push', e => {
         if (r.ok) m = Object.assign(m, await r.json());
       }
     } catch (err) {}
-    await self.registration.showNotification(m.title, { body: m.body, tag: m.tag || 'steady', icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', vibrate: [300, 150, 300, 150, 300], requireInteraction: /sos|crit/.test(m.tag || ''), renotify: true });
+    await self.registration.showNotification(m.title, { body: m.body, tag: m.tag || 'steady', data: { url: m.url || '/' }, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png', vibrate: [300, 150, 300, 150, 300], requireInteraction: /sos|crit/.test(m.tag || ''), renotify: true });
   })());
 });

@@ -118,6 +118,7 @@ function pageHome(){
   let h=top(carer?(nm?nm+'’s day':'Her day'):`${greet}${nm?', '+nm:''}`,new Date().toLocaleDateString('en-ZA',{weekday:'long',day:'numeric',month:'long'}));
   h+='<div class="stack">';
   h+=heroCard(g);
+  if(meta.code&&A.sync.state==='err')h+=`<div class="banner crit"><div class="b">⚠️ Can’t reach the family space</div><div class="sm">${esc(A.sync.err||'Check your connection')} — new messages won’t show until this works.</div><button class="btn primary block mt" data-act="sync-now">Try again</button></div>`;
   h+=quoteCard();
   if(!meta.ro&&!carer) h+=`<button class="sosbtn" data-act="sos"><span>🆘</span> I need help<small>Alerts your family with your location</small></button>`;
   if(meta.recheck>now()) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Recheck in <span data-cd="recheck">${cd(meta.recheck)}</span></h3><div class="sm">Wait the full 15 minutes before testing again.</div></div><button class="btn sm white" data-act="add" data-v="glucose">Log</button></div></div>`;

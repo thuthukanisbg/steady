@@ -125,8 +125,8 @@ export default async (req) => {
     // private 1:1 messages are only ever sent to the two people in them (owner included — no one else can read them)
     // phone alerts for new chat messages: group -> everyone else; private -> only the person it is for (no text in the alert)
     if (newMsgs.length) await Promise.race([Promise.all(newMsgs.slice(0, 3).map(m => pushSpace(key, m.room === 'g'
-      ? { title: '💬 ' + (m.by || 'Family'), body: String(m.text).slice(0, 90), tag: 'chat-g', url: '/' }
-      : { title: '🔒 ' + (m.by || 'Family'), body: 'sent you a private message', tag: 'chat-' + (m.by || ''), url: '/' },
+      ? { title: '💬 ' + (m.by || 'Family'), body: String(m.text).slice(0, 90), tag: 'chat-g', url: '/?go=chat' }
+      : { title: '🔒 ' + (m.by || 'Family'), body: 'sent you a private message', tag: 'chat-' + (m.by || ''), url: '/?go=chat' },
       m.room === 'g' ? { skipMe: me || '' } : { onlyMe: m.to }).catch(() => null))), new Promise(r => setTimeout(r, 2500))]);
     // same name = same person: private messages sent to an older identity of this name (e.g. before personal PINs) are still theirs
     const mine = new Set([me]);

@@ -385,6 +385,8 @@ A.joinSpace=async function(code,pin,create,vpin,ident){
   return {ok:true};
 };
 A.leaveSpace=function(){
+  // stop this phone getting notifications for a space it has logged out of
+  try{if(meta.code&&meta.pushEp)fetch('/api/push',{method:'POST',keepalive:true,headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.tok?undefined:meta.pin,tok:meta.tok||undefined,action:'unsub',sub:{endpoint:meta.pushEp},dev:meta.dev,who:(meta.ppin&&!meta.tok)?meta.who:undefined,ppin:meta.tok?undefined:(meta.ppin||undefined)})}).catch(()=>{});}catch(e){}
   // a view-only phone keeps no copy of her data once it is logged out
   if(meta.ro){ Object.keys(recs).forEach(k=>delete recs[k]); meta.pending={}; }
   meta.lastCode=meta.code||meta.lastCode||'';meta.pushOn=false;meta.pushSynced=0;meta.lastWho=meta.ro?meta.who:meta.lastWho;meta.ppin='';meta.tok='';meta.invites=undefined;meta.code='';meta.pin='';meta.seq=0;meta.ro=false;meta.vpin='';meta.hasFamilyPin=false;meta.epoch=undefined;meta.me='';persist();setSync('off')};

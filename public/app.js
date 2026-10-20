@@ -371,6 +371,7 @@ function boot(){
   if(!meta.onboarded){F={step:'ob1',role:meta.role||'patient'};sheet(obHtml());}
   const sp=new URLSearchParams(location.search), sc=(sp.get('s')||'').toUpperCase();
   if(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(sc)&&!meta.code){meta.lastCode=sc;persist();if(meta.onboarded)setTimeout(()=>ACT['open-sync']({dataset:{v:'join'}}),300);}
+  if(sp.get('go')==='chat'&&meta.code){U.tab='chat';U.room=null;setTimeout(()=>render(true),0);}
   if(sp.get('sos')==='1'&&meta.onboarded&&meta.code&&!meta.ro&&meta.role!=='carer')setTimeout(()=>ACT.sos(),400);
   const qa=sp.get('add'); if(qa&&forms[qa]&&meta.onboarded) openAdd(qa);
   if(meta.code) A.doSync();
@@ -555,4 +556,6 @@ ACT['call-mute']=()=>{CALL.muted=!CALL.muted;CALL.stream&&CALL.stream.getAudioTr
 ACT['call-cam']=()=>{CALL.camOff=!CALL.camOff;CALL.stream&&CALL.stream.getVideoTracks().forEach(t=>t.enabled=!CALL.camOff);showCall('in','');};
 async function checkIncoming(){if(CALL.state!=='idle'||!meta.code||!meta.me||document.visibilityState!=='visible')return;const r=await callApi({action:'poll'});if(r.call&&CALL.state==='idle')showIncoming(r.call);}
 setInterval(checkIncoming,3000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkIncoming();});window.addEventListener('focus',checkIncoming);
+/* tapping a notification while the app is open: jump to the right screen */
+if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{const u=String((e.data&&e.data.go)||'');if(/go=chat/.test(u)&&meta.code){U.tab='chat';U.room=null;render(true);A.doSync();}else if(meta.code){A.doSync();checkIncoming();}});
 })();
