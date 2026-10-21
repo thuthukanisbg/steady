@@ -46,7 +46,7 @@ A.persist = persist;
 const DEF = {
   name:'', avatar:'🌸', units:'mmol',
   crit_low:3.0, low:3.9, high:10.0, crit_high:13.9,
-  carb_meal:45, carb_snack:15, walk_goal:30, walk_week:150, treats_week:2, stack_hours:3,
+  carb_meal:45, carb_snack:15, walk_goal:30, step_goal:6000, walk_week:150, treats_week:2, stack_hours:3,
   insulins:[{n:'Rapid-acting (mealtime)',c:'rapid'},{n:'Long-acting (basal)',c:'long'}],
   plan_note:'', carers:[], my_email:'', email_alerts:true, email_reminders:true, email_digest:true, miss_hours:8,
   reminders:[
@@ -194,10 +194,16 @@ function treatFreeRun(){
   let d=startOfDay(now()),n=0; if(!gDays.has(dayKey(d))) d=addDays(d,-1);
   while(gDays.has(dayKey(d))&&!tDays.has(dayKey(d))){n++;d=addDays(d,-1);} return n;
 }
+function stepDays(){const m={};list('steps').forEach(r=>{m[r.day||dayKey(r.ts)]=Math.max(m[r.day||dayKey(r.ts)]||0,r.n||0);});return m;}
+A.stepsToday=()=>stepDays()[dayKey(now())]||0;
+A.stepsWeek=()=>{const m=stepDays(),o=[];for(let i=6;i>=0;i--){const d=dayKey(addDays(startOfDay(now()),-i));o.push({d,n:m[d]||0});}return o;};
+A.setSteps=n=>{n=Math.max(0,Math.min(100000,Math.round(n)));const day=dayKey(now());return put({id:'st_'+day,type:'steps',day,n,ts:startOfDay(now())+12*HOUR});};
+A.makeStepsKey=function(){const b=new Uint8Array(12);crypto.getRandomValues(b);meta.stepsKey=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');persist();return A.doSync({stepsKey:meta.stepsKey});};
 function game(){
+  const sd=stepDays(),sv=Object.values(sd),sgoal=cfg().step_goal||6000,sTot=sv.reduce((a,x)=>a+x,0),sBest=sv.reduce((a,x)=>Math.max(a,x),0),sStreak=streakOf(new Set(Object.keys(sd).filter(k=>sd[k]>=sgoal)));
   const g=list('glucose'),ins=list('insulin'),meals=list('meal'),walks=list('walk'),moods=list('mood'),res=list('resist');
   const bb=bounceBacks(g), inr=g.filter(r=>gstat(r.v)==='ok').length;
-  const points = g.length*5+inr*2+ins.length*3+meals.length*4+walks.reduce((a,w)=>a+10+Math.floor((w.min||0)/5),0)+moods.length*3+res.length*15+bb*20;
+  const points = g.length*5+inr*2+ins.length*3+meals.length*4+walks.reduce((a,w)=>a+10+Math.floor((w.min||0)/5),0)+moods.length*3+res.length*15+bb*20+Math.round(sTot/250);
   const set=new Set(g.map(r=>dayKey(r.ts))); const streak=streakOf(set);
   const insDays=new Set(ins.map(r=>dayKey(r.ts))).size;
   const r7=rangeStats(7);
@@ -218,6 +224,11 @@ function game(){
     B('tf7','🍎','Treat-Free Week','7 logged days with no treats',treatFreeRun(),7),
     B('ins7','💉','Dose Discipline','Insulin logged on 7 different days',insDays,7),
     B('mood7','🧠','Self-Aware','Log mood 7 times',moods.length,7),
+    B('st5k','👟','5K Day','Walk 5,000 steps in a day',sBest,5000),
+    B('st10k','🥾','10K Day','Walk 10,000 steps in a day',sBest,10000),
+    B('stg3','🌟','Step Streak','Hit your step goal 3 days in a row',sStreak,3),
+    B('stg7','🏅','Step Week','Hit your step goal 7 days in a row',sStreak,7),
+    B('st100k','🗺️','100K Club','100,000 steps in total',sTot,100000),
     B('early5','🌅','Early Bird','5 fasting readings',g.filter(r=>r.ctx==='fasting').length,5)
   ];
   const per=120, level=1+Math.floor(points/per);
@@ -344,7 +355,7 @@ A.doSync=async function(opts={}){
   const sentU={}; const out=[];
   Object.keys(meta.pending).forEach(id=>{ if(recs[id]){sentU[id]=recs[id].u; out.push(recs[id]);} else delete meta.pending[id]; });
   try{
-    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.tok?undefined:meta.pin,tok:meta.tok||undefined,invite:opts.invite||undefined,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:(meta.ppin&&!meta.tok)?meta.who:undefined,ppin:meta.tok?undefined:(meta.ppin||undefined),email:(meta.ppin&&!meta.tok)?(meta.email||undefined):undefined,join:!!opts.joining})});
+    const res=await fetch('/api/sync',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:meta.code,pin:meta.tok?undefined:meta.pin,tok:meta.tok||undefined,invite:opts.invite||undefined,create:!!opts.create,since:meta.seq,records:out,vpin:opts.vpin||undefined,stepsKey:opts.stepsKey||undefined,newPin:opts.newPin||undefined,dev:meta.dev,epoch:opts.joining?undefined:meta.epoch,who:(meta.ppin&&!meta.tok)?meta.who:undefined,ppin:meta.tok?undefined:(meta.ppin||undefined),email:(meta.ppin&&!meta.tok)?(meta.email||undefined):undefined,join:!!opts.joining})});
     const j=await res.json().catch(()=>({}));
     if(!res.ok){ const m={not_found:'That family code wasn’t found.',wrong_pin:'Wrong PIN for that code.',same_pin:'The family PIN must be different from her PIN.',bad_family_pin:'Family PIN must be 4–8 digits.',bad_pin:'PIN must be 4–8 digits.',session_expired:'The PIN was changed — please log in again.',need_identity:'Enter your name and your own PIN below (family only).',need_email:'Enter your email below — it is used for emergency alerts and resetting your PIN.',name_taken:'That name is already used with a different personal PIN. Enter your own PIN, or use another name.',too_many:'Too many people in this space.'}[j.error]||('Sync problem ('+res.status+')'); throw Object.assign(new Error(m),{code:j.error,status:res.status}); }
     let newCrit=[];

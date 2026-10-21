@@ -275,3 +275,7 @@ button.card{font:inherit;color:inherit}
 .quote .qk{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75}
 .quote .qt{font-family:'Fraunces',Georgia,serif;font-size:19px;line-height:1.35;margin:8px 0 4px}
 .quote .qr{font-size:13px;opacity:.8;margin-bottom:6px}
+
+.steps .k{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.75}
+.steps .sv{font-size:28px;font-weight:800;margin:2px 0 6px}.steps .sv small{font-size:14px;opacity:.65;font-weight:600}
+.sbars{display:flex;align-items:flex-end;gap:4px;height:34px}.sbars i{flex:1;background:currentColor;opacity:.25;border-radius:3px}.sbars i.hit{background:var(--ok,#2bb673);opacity:1}

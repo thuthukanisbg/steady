@@ -48,6 +48,14 @@ function guideCard(st,ctx){
 U.guideCard=guideCard; U.heroCard=heroCard;
 
 /* ---------------- HOME ---------------- */
+function stepsCard(){
+  const c=cfg(),n=A.stepsToday(),goal=c.step_goal||6000,pct=Math.min(100,Math.round(n/goal*100)),wk=A.stepsWeek(),mx=Math.max(goal,...wk.map(x=>x.n)),R=34,C=2*Math.PI*R;
+  const bars=wk.map(x=>`<i title="${esc(x.d)}: ${x.n.toLocaleString('en-ZA')}" style="height:${Math.max(4,Math.round(x.n/mx*100))}%" class="${x.n>=goal?'hit':''}"></i>`).join('');
+  const own=!meta.ro&&meta.role!=='carer';
+  return `<div class="card steps"><div class="row between" style="align-items:center;gap:14px"><svg width="86" height="86" viewBox="0 0 86 86" aria-hidden="true"><circle cx="43" cy="43" r="${R}" fill="none" stroke="currentColor" stroke-opacity=".15" stroke-width="9"/><circle cx="43" cy="43" r="${R}" fill="none" stroke="var(--ok,#2bb673)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(C*pct/100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 43 43)"/><text x="43" y="48" text-anchor="middle" font-size="17" font-weight="800" fill="currentColor">${pct}%</text></svg>
+    <div class="grow"><div class="k">👟 Steps today</div><div class="sv">${n.toLocaleString('en-ZA')}<small> / ${goal.toLocaleString('en-ZA')}</small></div><div class="sbars">${bars}</div></div></div>
+    ${own?`<div class="row mt" style="gap:8px"><button class="btn soft sm grow" data-act="steps-add">＋ Add steps</button><button class="btn ghost sm grow" data-act="steps-help">⚙️ Count automatically</button></div>`:''}</div>`;
+}
 const QUOTES=[
   ["Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee.","Isaiah 41:10"],
   ["I can do all things through Christ which strengtheneth me.","Philippians 4:13"],
@@ -120,6 +128,7 @@ function pageHome(){
   h+=heroCard(g);
   if(meta.code&&A.sync.state==='err')h+=`<div class="banner crit"><div class="b">⚠️ Can’t reach the family space</div><div class="sm">${esc(A.sync.err||'Check your connection')} — new messages won’t show until this works.</div><button class="btn primary block mt" data-act="sync-now">Try again</button></div>`;
   h+=quoteCard();
+  h+=stepsCard();
   if(!meta.ro&&!carer) h+=`<button class="sosbtn" data-act="sos"><span>🆘</span> I need help<small>Alerts your family with your location</small></button>`;
   if(meta.recheck>now()) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Recheck in <span data-cd="recheck">${cd(meta.recheck)}</span></h3><div class="sm">Wait the full 15 minutes before testing again.</div></div><button class="btn sm white" data-act="add" data-v="glucose">Log</button></div></div>`;
   else if(meta.recheck) h+=`<div class="banner crit"><div class="row between"><div><h3 style="margin:0">⏱️ Time to recheck!</h3><div class="sm">15 minutes are up — test and log your sugar.</div></div><button class="btn sm primary" data-act="add" data-v="glucose">Log</button></div></div>`;
@@ -331,6 +340,7 @@ function pageMe(){
     <div><label class="f">High above</label><input class="inp" type="text" inputmode="decimal" step="any" data-gset="high" value="${fmtG(c.high)}"></div><div><label class="f">Very high above</label><input class="inp" type="text" inputmode="decimal" step="any" data-gset="crit_high" value="${fmtG(c.crit_high)}"></div></div>
     <div class="grid2"><div><label class="f">Carbs / meal (g)</label><input class="inp" type="text" inputmode="decimal" data-set="carb_meal" data-num="1" value="${c.carb_meal}"></div><div><label class="f">Carbs / snack (g)</label><input class="inp" type="text" inputmode="decimal" data-set="carb_snack" data-num="1" value="${c.carb_snack}"></div>
     <div><label class="f">Daily walk (min)</label><input class="inp" type="text" inputmode="decimal" data-set="walk_goal" data-num="1" value="${c.walk_goal}"></div><div><label class="f">Treats per week</label><input class="inp" type="text" inputmode="decimal" data-set="treats_week" data-num="1" value="${c.treats_week}"></div></div>
+    <div class="grid2"><div><label class="f">Daily steps goal</label><input class="inp" type="text" inputmode="numeric" data-set="step_goal" data-num="1" value="${c.step_goal||6000}"></div><div></div></div>
     <div class="disc">Defaults follow common international targets. Always use the numbers her doctor gives her.</div>`);
   h+=sec('💉 Insulin',`<div>${c.insulins.map((i,k)=>`<div class="item"><div class="ico">💉</div><div class="grow"><div class="t">${esc(i.n)}</div><div class="d">${{rapid:'Mealtime / rapid-acting',long:'Long-acting / basal',mixed:'Mixed',other:'Other'}[i.c]}</div></div><button class="x" data-act="ins-del" data-i="${k}" aria-label="Remove">✕</button></div>`).join('')}</div>
     <label class="f">Add insulin</label><input class="inp" id="insname" placeholder="Name, e.g. NovoRapid"><select class="sel mt" id="inscat"><option value="rapid">Mealtime / rapid-acting</option><option value="long">Long-acting / basal</option><option value="mixed">Mixed</option><option value="other">Other</option></select><button class="btn soft block mt" data-act="ins-add">Add insulin</button>
@@ -414,5 +424,5 @@ function pageChat(){
   return h+`</div></div>`;
 }
 
-Object.assign(U,{pageChat,pageHome,pageFood,pageProgress,pageCare,pageMe,top,planHtml,treatsHtml});
+Object.assign(U,{stepsCard,pageChat,pageHome,pageFood,pageProgress,pageCare,pageMe,top,planHtml,treatsHtml});
 })();

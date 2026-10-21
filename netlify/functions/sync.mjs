@@ -10,7 +10,7 @@ const PEOPLE_RESET = '2026-10-19-two-people'; // one-time: clear private chats +
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   let b; try { b = await req.json(); } catch { return json({ error: 'bad_json' }, 400); }
-  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, ppin, join = false, email, tok, invite } = b || {};
+  const { code, pin, create = false, since = 0, records = [], vpin, newPin, dev, epoch, ppin, join = false, email, tok, invite, stepsKey } = b || {};
   let who = b && b.who;
   if (!validCreds(code, tok ? '0000' : pin)) return json({ error: 'bad_credentials' }, 400);
   if (vpin !== undefined && vpin !== null && !/^\d{4,8}$/.test(String(vpin))) return json({ error: 'bad_family_pin' }, 400);
@@ -61,6 +61,7 @@ export default async (req) => {
       if (vh === doc.pin) return json({ error: 'same_pin' }, 400);
       if (doc.vpin !== vh) { doc.vpin = vh; changed = true; if (cur) bump = true; }
     }
+    if (role === 'owner' && typeof stepsKey === 'string' && /^[a-f0-9]{24}$/.test(stepsKey)) { const kh = await sha('sk:' + code + ':' + stepsKey); if (doc.stepsKh !== kh) { doc.stepsKh = kh; changed = true; } }
     let inviteIdx = null;
     if (role === 'owner' && invite && typeof invite === 'object' && validEmail(String(invite.email || '').trim().toLowerCase())) {
       const em = String(invite.email).trim().toLowerCase(), eh = await ehash(em);
