@@ -48,6 +48,7 @@ function persist(){
   }
   LS.set('meta',ok?meta:Object.assign({},meta,{seq:0}));
 }
+A.APP_V=23;
 A.resync=function(){ meta.seq=0; persist(); return A.doSync(); };
 A.persist = persist;
 

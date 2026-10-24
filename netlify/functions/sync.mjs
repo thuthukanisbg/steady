@@ -62,6 +62,14 @@ export default async (req) => {
       if (doc.vpin !== vh) { doc.vpin = vh; changed = true; if (cur) bump = true; }
     }
     if (role === 'owner' && typeof stepsKey === 'string' && /^[a-f0-9]{24}$/.test(stepsKey)) { const kh = await sha('sk:' + code + ':' + stepsKey); if (doc.stepsKh !== kh) { doc.stepsKh = kh; changed = true; } }
+    // everyone who is signed in with a name must be listed in Chat: (re)create their entry if it is missing or was cleared
+    let selfName = '';
+    if (iv) selfName = iv.name;
+    else if (role !== 'owner' && me && typeof who === 'string' && who.trim() && doc.people && doc.people[nameKey(who)]) selfName = doc.people[nameKey(who)].name || '';
+    if (selfName && me) {
+      const mid = 'mb_' + me, ex0 = doc.recs[mid];
+      if (!ex0 || ex0.del || ex0.name !== selfName) { const t = Date.now(); doc.recs[mid] = { id: mid, type: 'member', name: selfName, role: 'family', by: selfName, ts: t, u: t, s: ++doc.seq, a: me }; changed = true; }
+    }
     let inviteIdx = null;
     if (role === 'owner' && invite && typeof invite === 'object' && validEmail(String(invite.email || '').trim().toLowerCase())) {
       const em = String(invite.email).trim().toLowerCase(), eh = await ehash(em);
@@ -99,7 +107,7 @@ export default async (req) => {
       const ex = doc.recs[r.id];
       if (role === 'viewer') {                       // view-only: family can add notes, photos, reactions and their own email follow
         if (!FAMILY_WRITE.has(r.type) || (ex && ex.type !== r.type)) continue;
-        if (ex && (!me || ex.a !== me)) continue;    // ...and can only change or delete what they posted themselves
+        if (ex && (!me || ex.a !== me) && !(r.type === 'member' && r.id === 'mb_' + me)) continue;    // ...and can only change or delete what they posted themselves (their own chat entry is always theirs)
       }
       if (me) r.a = me; else delete r.a;
       if (r.type === 'follower' && !r.del && (!ex || ex.del)) { if (followers >= 10) continue; followers++; }

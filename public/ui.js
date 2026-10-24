@@ -421,7 +421,8 @@ function pageChat(){
   const ms=members();
   let h=top('Chat','Talk with the family')+`<div class="stack"><button class="btn ghost sm" data-act="sync-leave" style="align-self:flex-end">🔒 Log out</button><div class="card"><h3>Group</h3>${row('g','👨‍👩‍👧','Family group','Everyone together')}</div><div class="card"><h3>Private chats 🔒</h3>`;
   h+=ms.length?ms.map(m=>row(m.id.slice(3),m.role==='her'?'💛':'🙂',m.name||'Family',m.role==='her'?'Message her privately':'Message privately')).join(''):`<div class="empty" style="padding:12px"><div class="e">👋</div>People appear here once they’ve opened the app. Private chats can only be read by the two people in them.</div>`;
-  return h+`</div></div>`;
+  const nm=list('member').filter(m=>!m.del).length,nmsg=list('msg').length,syn=A.sync.last?new Date(A.sync.last).toLocaleTimeString('en-ZA',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'never';
+  return h+`</div><div class="xs mut center" style="opacity:.7">app v${A.APP_V} · id ${esc(String(meta.me||'').slice(0,4))} · ${meta.ro?'family':'owner'} · ${nm} people · ${nmsg} messages · synced ${syn}${A.sync.state==='err'?' · '+esc(A.sync.err||'error'):''}</div></div>`;
 }
 
 Object.assign(U,{stepsCard,pageChat,pageHome,pageFood,pageProgress,pageCare,pageMe,top,planHtml,treatsHtml});
