@@ -35,7 +35,10 @@ function softRender(){
   if($('#sheet').classList.contains('open')||typing){pendingRender=true;return;}
   const y=window.scrollY; render(true); window.scrollTo(0,y);
 }
-function go(tab){U.tab=tab;if(tab!=='chat')U.room=null;render();window.scrollTo(0,0);}
+function go(tab){U.tab=tab;if(tab!=='chat')U.room=null;render();window.scrollTo(0,0);
+  // chat looks empty although we are connected: re-download everything once so nothing is missing
+  if(tab==='chat'&&meta.code&&!list_members_ok()){meta.healAt=now();persist();A.resync().then(()=>render(true));}}
+function list_members_ok(){return Object.values(A.recs()).some(r=>r.type==='member'&&!r.del&&r.id!=='mb_'+meta.me)||(meta.healAt&&now()-meta.healAt<10*60*1000);}
 function withBadges(fn){
   const before=new Set(A.game().badges.filter(b=>b.got).map(b=>b.id)); const r=fn();
   const nb=A.game().badges.filter(b=>b.got&&!before.has(b.id)); if(nb.length) setTimeout(()=>toast('🏅 New badge: '+nb[0].n+'!'),500); return r;
@@ -334,7 +337,7 @@ A.onRemoteAlert=arr=>{
 A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot'); if(dot){const st=A.sync.state;dot.className='sync-dot '+(st==='on'?'on':st==='busy'?'busy':(st==='err'||st==='offline')?'err':'');} } });
 
 /* ---------- events ---------- */
-const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable','quote-next','call','call-accept','call-decline','call-end','call-mute','call-cam','otp-send','otp-go']);
+const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable','quote-next','resync','call','call-accept','call-decline','call-end','call-mute','call-cam','otp-send','otp-go']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
 document.addEventListener('input',e=>{
   const t=e.target;
@@ -415,6 +418,7 @@ function stepsHelpHtml(){const k=meta.stepsKey;
   <div class="disc">Not set up yet? Use “＋ Add steps” any time — it counts the same.</div>`;}
 ACT['steps-help']=()=>{if(!meta.code){toast('Connect a family space first (Profile → Family sync)');return;}sheet(stepsHelpHtml());};
 ACT['steps-key']=async el=>{el.disabled=true;await A.makeStepsKey();sheet(stepsHelpHtml());};
+ACT['resync']=async el=>{el.disabled=true;toast('Reloading everything…');const r=await A.resync();toast(r.ok?'✔ Everything reloaded':'Couldn’t reach the family space');render(true);};
 ACT['msg-del']=el=>{const id=el.dataset.id;confirmSheet('Delete this message?','Delete',()=>{A.del(id);U.chatRefresh();});};
 document.addEventListener('keydown',e=>{if(e.target&&e.target.id==='chatin'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();ACT['chat-send']();}});
 // keep my name on the member list so others can message me privately

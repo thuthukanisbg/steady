@@ -370,7 +370,7 @@ function pageMe(){
       <div class="disc">Changing either PIN logs everyone else out — they must log in again.</div>
       <div class="disc">Family join with the code + <b>family PIN</b> via “Join with a code”. They can watch everything but not edit.</div>`}
       <button class="btn soft block mt" data-act="invite">🔗 Share invite link (family then only types the PIN)</button>
-      <div class="row mt"><button class="btn soft grow" data-act="sync-now">Sync now</button><button class="btn danger" data-act="sync-leave">Disconnect</button></div>`
+      <div class="row mt"><button class="btn soft grow" data-act="sync-now">Sync now</button><button class="btn danger" data-act="sync-leave">Disconnect</button></div><button class="btn ghost block mt" data-act="resync">🔄 Reload everything from the server</button><div class="disc">Use this if chats, people or messages look missing on this phone.</div>`
     :`<div class="lead">Link two phones so what she logs shows up on yours instantly, with alerts when it matters.</div><div class="row mt"><button class="btn primary grow" data-act="open-sync" data-v="create">Create family space</button><button class="btn ghost grow" data-act="open-sync" data-v="join">Join with a code</button></div>`,!meta.code);
   h+=sec('📤 Data',`<button class="btn soft block" data-act="export">Download all data (CSV) for the doctor</button><button class="btn danger block mt" data-act="reset">Erase data on this phone</button><div class="disc">Synced data is stored in your Netlify site’s private storage. Keep the family code private.</div>`);
   h+=`<p class="disc center">Steady is a logging and coaching aid — not a medical device and not a substitute for professional care. In an emergency call 10177 / 112.</p>`;

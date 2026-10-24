@@ -39,7 +39,16 @@ const LS = {
 let recs = LS.get('recs',{});
 let meta = Object.assign({role:'patient',who:'',code:'',pin:'',seq:0,pending:{},onboarded:false,device:uid(),dev:'',me:'',ro:false,vpin:'',hasFamilyPin:false,fired:{},recheck:0,pause:0,notified:{},installSeen:0},LS.get('meta',{}));
 A.meta = meta;
-function persist(){LS.set('recs',recs);LS.set('meta',meta)}
+function persist(){
+  // if the phone's storage is full the records can't be saved — never remember a sync position we couldn't keep the data for
+  let ok=LS.set('recs',recs);
+  if(!ok){ // shrink: keep photo data only for the newest few, then retry
+    Object.values(recs).filter(x=>x.type==='post'&&x.img).sort((a,b)=>b.ts-a.ts).slice(4).forEach(x=>{x.img='';x.pruned=1;});
+    ok=LS.set('recs',recs);
+  }
+  LS.set('meta',ok?meta:Object.assign({},meta,{seq:0}));
+}
+A.resync=function(){ meta.seq=0; persist(); return A.doSync(); };
 A.persist = persist;
 
 /* ---------- settings ---------- */
