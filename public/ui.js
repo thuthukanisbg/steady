@@ -148,7 +148,7 @@ function pageHome(){
   const nr=A.nextReminder();
   if(nr) h+=`<div class="card row tap" data-act="remind-go" data-k="${nr.k}"><div class="ico">⏰</div><div class="grow"><div class="t b">${esc(nr.l)}</div><div class="d sm mut">${nr.t} · in ${dur(nr.in)}</div></div><span class="pill solid">Next up</span></div>`;
   const ins=list('insulin').slice(0,2);
-  if(ins.length) h+=`<div class="card"><h3>💉 Recent insulin</h3>`+ins.map(i=>`<div class="item"><div class="ico">💉</div><div class="grow"><div class="t">${esc(i.name)}</div><div class="d">${ago(i.ts)}${i.cat==='rapid'?' · mealtime insulin':''}</div></div><span class="carb">${i.units} u</span></div>`).join('')+'</div>';
+  if(ins.length) h+=`<div class="card"><h3>💉 Recent insulin</h3>`+ins.map(i=>`<div class="item"><div class="ico">💉</div><div class="grow"><div class="t">${esc(i.name)}</div><div class="d">${ago(i.ts)}${i.cat==='rapid'?' · mealtime insulin':''}</div></div><span class="carb">${i.units} u</span>${meta.ro?'':`<button class="x" data-act="edit" data-id="${i.id}" aria-label="Edit">✎</button>`}</div>`).join('')+'</div>';
   const nt=list('note').find(n=>n.kind==='praise'||n.kind==='care');
   if(!carer&&nt&&now()-nt.ts<4*DAY) h+=`<div class="banner coral"><h3>💌 From ${esc(nt.by||'family')}</h3><div>${esc(nt.text)}</div></div>`;
   h+=`<button class="card tap" data-act="go" data-v="me" style="width:100%;text-align:left"><div class="row between"><div><div class="b">${gm.streak>0?'🔥 '+gm.streak+'-day streak':'🌱 Start a streak today'} · Level ${gm.level} <span class="mut">${gm.levelName}</span></div><div class="sm mut" style="margin-top:2px">${gm.points} pts · ${gm.got}/${gm.badges.length} badges</div></div><span class="mut">›</span></div><div class="meter"><i style="width:${gm.pct}%"></i></div></button>`;
@@ -251,7 +251,7 @@ function tlRow(r){
   else if(r.type==='treat'){ico='🍫';t=esc(r.what);d=(r.craving?'craving':'planned')+(r.note?' · '+esc(r.note):'');right=r.carbs?`<span class="carb">${r.carbs} g</span>`:'';}
   else return '';
   const by=r.by&&r.by!==me&&r.by!=='Me'?` · by ${esc(r.by)}`:'';
-  return `<div class="item"><div class="ico">${ico}</div><div class="grow"><div class="t">${t}</div><div class="d">${hhmm(r.ts)}${d?' · '+d:''}${by}</div></div>${right}<button class="x" data-act="del" data-id="${r.id}" aria-label="Delete">✕</button></div>`;
+  return `<div class="item"><div class="ico">${ico}</div><div class="grow"><div class="t">${t}</div><div class="d">${hhmm(r.ts)}${d?' · '+d:''}${by}${r.ed?' · edited':''}</div></div>${right}${meta.ro?'':`<button class="x" data-act="edit" data-id="${r.id}" aria-label="Edit">✎</button>`}<button class="x" data-act="del" data-id="${r.id}" aria-label="Delete">✕</button></div>`;
 }
 function pageProgress(){
   const days=U.prog, st=A.rangeStats(days), c=cfg();

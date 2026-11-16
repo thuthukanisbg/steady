@@ -51,7 +51,12 @@ const stepEl=()=>{};
 /* ---------- add sheet ---------- */
 const KINDS=[['glucose','🩸','Sugar'],['insulin','💉','Insulin'],['meal','🍽️','Meal'],['walk','🚶','Walk'],['mood','🙂','Mood'],['treat','🍫','Treat']];
 const forms={};
-function addHtml(){return `<div class="hscroll" style="margin-bottom:6px">${KINDS.map(k=>`<button class="chip scroll ${F.kind===k[0]?'on':''}" data-act="add" data-v="${k[0]}">${k[1]} ${k[2]}</button>`).join('')}</div>`+forms[F.kind]();}
+const E=ed=>ed?{id:ed.id,by:ed.by,pk:ed.pk,ed:now()}:{};
+function addHtml(){
+  if(F.editRec){let h=forms[F.kind]();
+    h=h.replace(/<h2>[^<]*<\/h2>/,'<h2>✎ Edit entry</h2><div class="banner info mt"><div class="sm">Fix anything that was entered wrong. The change updates for everyone and the entry is marked “edited”.</div></div>').replace(/(data-act="save-[a-z]+">)[^<]*/,'$1Save changes').replace(/<button class="btn coral block mt" data-act="walk-start">[\s\S]*?finished one —<\/div>/,'');
+    return h;}
+  return `<div class="hscroll" style="margin-bottom:6px">${KINDS.map(k=>`<button class="chip scroll ${F.kind===k[0]?'on':''}" data-act="add" data-v="${k[0]}">${k[1]} ${k[2]}</button>`).join('')}</div>`+forms[F.kind]();}
 function openAdd(kind,pre){F=Object.assign({kind},pre||{});sheet(addHtml());const el=$('#gv')||$('#iu');if(el)setTimeout(()=>el.focus(),280);}
 
 forms.glucose=()=>{
@@ -63,7 +68,7 @@ forms.glucose=()=>{
   ${timeNote()}<button class="btn primary block mt2" data-act="save-glucose">Save reading</button>`;
 };
 function stackWarn(){
-  const c=cfg(), ins=c.insulins[F.ins]; if(!ins||ins.c!=='rapid') return '';
+  const c=cfg(), ins=c.insulins[F.ins]; if(F.editRec||!ins||ins.c!=='rapid') return '';
   const lr=A.lastRapid(); if(!lr||now()-lr.ts>c.stack_hours*HOUR) return '';
   return `<div class="banner warn mt"><b>⚠️ Heads-up:</b> ${esc(lr.name)} (${lr.units} u) was logged ${ago(lr.ts)}. Mealtime insulin can still be working — check your doctor’s plan before another dose.</div>`;
 }
@@ -75,13 +80,17 @@ forms.insulin=()=>{
   <label class="f">Units taken</label><input class="inp bigin" style="font-size:44px;height:80px" id="iu" type="text" inputmode="decimal" step="0.5" placeholder="0">
   <div id="stackwarn">${stackWarn()}</div>${timeNote()}<button class="btn primary block mt2" data-act="save-insulin">Save dose</button><div class="disc center">Steady only records doses. It never suggests how much to take.</div>`;
 };
+const allFoods=()=>[...SD.foods,...(meta.foods||[])];
+function rememberFood(n,c){meta.foods=(meta.foods||[]).filter(f=>f.n!==n);meta.foods.unshift({n,c,e:'🍽️'});meta.foods=meta.foods.slice(0,60);persist();}
+const gUrl=q=>'https://www.google.com/search?q='+encodeURIComponent('carbs in '+q);
+function webLinks(q){q=(q||'').trim();return q.length<2?'':`<div class="chips mt"><button class="chip" data-act="web-food" data-q="${esc(q)}">🔎 Search online for “${esc(q.slice(0,24))}”</button><a class="chip" target="_blank" rel="noopener" href="${gUrl(q)}">🌐 Google it</a></div>`;}
 function mealResults(q){
-  q=(q||'').trim().toLowerCase(); let idx;
-  if(q) idx=SD.foods.map((f,i)=>i).filter(i=>SD.foods[i].n.toLowerCase().includes(q));
-  else{const cnt={};list('meal').slice(0,40).forEach(m=>(m.items||[]).forEach(it=>{const i=SD.foods.findIndex(f=>f.n===it.n);if(i>=0)cnt[i]=(cnt[i]||0)+1;}));
-    idx=Object.keys(cnt).map(Number).sort((a,b)=>cnt[b]-cnt[a]); ['Stiff pap','Eggs','Apple','Grilled chicken','Morogo / spinach','Seed / low-GI bread','Water'].forEach(n=>{const i=SD.foods.findIndex(f=>f.n===n);if(i>=0&&!idx.includes(i))idx.push(i);});}
+  q=(q||'').trim().toLowerCase(); let idx; const AF=allFoods();
+  if(q) idx=AF.map((f,i)=>i).filter(i=>AF[i].n.toLowerCase().includes(q));
+  else{const cnt={};list('meal').slice(0,40).forEach(m=>(m.items||[]).forEach(it=>{const i=AF.findIndex(f=>f.n===it.n);if(i>=0)cnt[i]=(cnt[i]||0)+1;}));
+    idx=Object.keys(cnt).map(Number).sort((a,b)=>cnt[b]-cnt[a]); ['Stiff pap','Eggs','Apple','Grilled chicken','Morogo / spinach','Seed / low-GI bread','Water'].forEach(n=>{const i=AF.findIndex(f=>f.n===n);if(i>=0&&!idx.includes(i))idx.push(i);});}
   idx=idx.slice(0,12);
-  return idx.length?`<div class="chips">${idx.map(i=>{const f=SD.foods[i];return `<button class="chip" data-act="meal-add" data-fi="${i}">${f.e} ${esc(f.n)} <span class="mut">${f.c}g</span></button>`}).join('')}</div>`:'<div class="sm mut">No match — use “Add something not in the list”.</div>';
+  return (idx.length?`<div class="chips">${idx.map(i=>{const f=AF[i];return `<button class="chip" data-act="meal-add" data-fi="${i}">${f.e} ${esc(f.n)} <span class="mut">${f.c}g</span></button>`}).join('')}</div>`:'<div class="sm mut">Not in your list.</div>')+webLinks(q);
 }
 function mealTotal(){return Math.round((F.items||[]).reduce((a,i)=>a+i.c*i.q,0));}
 function mealSel(){
@@ -95,9 +104,9 @@ forms.meal=()=>{
   if(!F.slot){const h=new Date().getHours();F.slot=h<10?'breakfast':h<12?'snack':h<15?'lunch':h<17?'snack':h<21?'dinner':'snack';}
   F.items=F.items||[];
   return `<h2>Log a meal</h2><div class="chips">${['breakfast','lunch','dinner','snack'].map(s=>`<button class="chip ${F.slot===s?'on':''}" data-act="pick" data-grp="slot" data-v="${s}">${cap(s)}</button>`).join('')}</div>
-  <label class="f">Add foods</label><input class="inp" id="mq" placeholder="🔍 Search: pap, apple, egg…" autocomplete="off"><div id="mres" class="mt">${mealResults('')}</div>
+  <label class="f">Add foods</label><input class="inp" id="mq" placeholder="🔍 Search: pap, apple, egg…" autocomplete="off"><div id="mres" class="mt">${mealResults('')}</div><div id="mweb" class="mt"></div>
   <div id="msel" class="mt">${mealSel()}</div>
-  <details class="acc"><summary>Add something not in the list</summary><div class="row mt"><input class="inp" id="cname" placeholder="Food"><input class="inp" id="ccarb" type="text" inputmode="decimal" placeholder="g carbs" style="width:110px"></div><button class="btn soft block mt" data-act="meal-custom">Add to meal</button></details>
+  <details class="acc" id="cdet"><summary>Add something not in the list</summary><div class="row mt"><input class="inp" id="cname" placeholder="Food"><input class="inp" id="ccarb" type="text" inputmode="decimal" placeholder="g carbs" style="width:110px"></div><button class="btn soft block mt" data-act="meal-custom">Add to meal</button></details>
   ${timeNote()}<button class="btn primary block mt2" data-act="save-meal">Save meal</button>`;
 };
 forms.walk=()=>{
@@ -142,7 +151,7 @@ ACT.add=el=>openAdd(el.dataset.v);
 ACT.pick=el=>{
   const g=el.dataset.grp,v=el.dataset.v;
   F[g]=g==='ins'?(v==='o'?'o':parseInt(v,10)):g==='craving'?v==='1':g==='mood'?parseInt(v,10):v;
-  if(g==='ins'){const u=$('#iu')&&$('#iu').value;setBody(addHtml());if(u)$('#iu').value=u;return;}
+  if(g==='ins'){const keep=['iu','ft','fn'].map(id=>[id,$('#'+id)&&$('#'+id).value]);const open=$('#ft')&&$('#ft').closest('details').open;setBody(addHtml());keep.forEach(([id,v])=>{if(v!=null&&$('#'+id))$('#'+id).value=v;});if(open&&$('#ft'))$('#ft').closest('details').open=true;return;}
   $$('#sheet [data-grp="'+g+'"]').forEach(b=>b.classList.toggle('on',b===el));
   if(g==='slot'&&$('#msel')) $('#msel').innerHTML=mealSel();
 };
@@ -160,26 +169,53 @@ ACT['plan-log']=el=>{
 ACT['remind-go']=el=>{const k=el.dataset.k;if(k==='sugar')openAdd('glucose');else if(k==='insulin')openAdd('insulin');else if(k==='walk')openAdd('walk');else{U.sub.food='plan';U.planDay=new Date().getDay();go('food');}};
 
 ACT['save-glucose']=()=>{
+  const ED=F.editRec;
   const raw=pf($('#gv').value); if(!(raw>0)){toast('Enter your reading first');return;}
   const v=fromIn(raw); if(v<0.5||v>45){toast('That number looks off — please double-check');return;}
   const ts=parseTime($('#ft'))||now(), ctx=F.ctx, note=($('#fn').value||'').trim();
-  const rec=withBadges(()=>put({type:'glucose',v:Math.round(v*100)/100,ctx,note,ts}));
+  const rec=withBadges(()=>put({...E(ED),type:'glucose',v:Math.round(v*100)/100,ctx,note,ts}));
+  if(ED){closeSheet();render(true);toast('✔ Reading updated');return;}
   meta.recheck=0;persist();A.notifyServer(rec);closeSheet();render(true);showResult(rec);
 };
 ACT['save-insulin']=()=>{
+  const ED=F.editRec;
   const c=cfg(), u=pf($('#iu').value); if(!(u>0)||u>300){toast('Enter the units taken');return;}
   let name,cat; if(F.ins==='o'){name=($('#insother').value||'').trim();cat='other';if(!name){toast('Name the insulin');return;}}else{const i=c.insulins[F.ins]||c.insulins[0];if(!i){toast('Add an insulin in Profile first');return;}name=i.n;cat=i.c;}
-  withBadges(()=>put({type:'insulin',name,cat,units:u,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
-  closeSheet();render(true);toast('💉 Dose logged');
+  withBadges(()=>put({...E(ED),type:'insulin',name,cat,units:u,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  closeSheet();render(true);toast(ED?'✔ Dose updated':'💉 Dose logged');
 };
-ACT['meal-add']=el=>{const f=SD.foods[+el.dataset.fi],ex=F.items.find(x=>x.n===f.n);if(ex)ex.q+=1;else F.items.push({n:f.n,c:f.c,q:1,e:f.e});$('#msel').innerHTML=mealSel();};
+ACT['meal-add']=el=>{const f=allFoods()[+el.dataset.fi],ex=F.items.find(x=>x.n===f.n);if(ex)ex.q+=1;else F.items.push({n:f.n,c:f.c,q:1,e:f.e});$('#msel').innerHTML=mealSel();};
+ACT['web-food']=async el=>{
+  const q=(el.dataset.q||'').trim(), box=$('#mweb'); if(!box||q.length<2) return;
+  box.innerHTML='<div class="sm mut">🔎 Searching online…</div>'; const my=q; F.webq=q;
+  const none=(why)=>{box.innerHTML=`<div class="banner warn"><div class="sm"><b>${why}</b> Search Google, then type what you find under “Add something not in the list”.</div><a class="btn soft block mt" target="_blank" rel="noopener" href="${gUrl(q)}">🌐 Search Google: carbs in ${esc(q)}</a></div>`;const d=$('#cdet');if(d){d.open=true;if($('#cname')&&!$('#cname').value)$('#cname').value=q;}};
+  try{
+    const r=await fetch('/api/food?q='+encodeURIComponent(q)); if(!r.ok) throw 0; const j=await r.json(); if(F.webq!==my||!$('#mweb')) return;
+    F.web=j.items||[]; if(!F.web.length) return none('Nothing found online for “'+esc(q)+'”.');
+    box.innerHTML=`<div class="sm mut">From online food databases — tap one to add it:</div>`+F.web.map((x,i)=>`<button class="item tap" data-act="web-pick" data-i="${i}" style="width:100%;text-align:left"><div class="grow"><div class="t sm">${esc(x.n)}${x.brand?' · '+esc(x.brand):''}</div><div class="d">${x.serv?x.serv.c+' g carbs per '+esc(x.serv.label)+' · ':''}${x.per100!==null?x.per100+' g per 100 g · ':''}${esc(x.src)}</div></div></button>`).join('')+`<div class="center mt"><a class="sm" target="_blank" rel="noopener" href="${gUrl(q)}">Not what you wanted? Search Google</a></div>`;
+  }catch(e){ if(F.webq===my&&$('#mweb')) none(navigator.onLine===false?'You’re offline.':'Couldn’t reach the food database.'); }
+};
+const webPer100=x=>x.per100!==null?x.per100:(x.serv?x.serv.c/x.serv.g*100:0);
+function webCalc(){const x=F.web[F.wi],g=pf($('#wg').value)||0,c=Math.round(webPer100(x)*g/10)/10;$('#wc').textContent=g>0?`≈ ${c} g carbs`:'Enter an amount';return c;}
+ACT['web-pick']=el=>{
+  F.wi=+el.dataset.i; const x=F.web[F.wi], g=x.serv?x.serv.g:100;
+  $('#mweb').innerHTML=`<div class="card flat"><div class="t"><b>${esc(x.n)}</b>${x.brand?' · '+esc(x.brand):''}</div><label class="f">How much did you eat? (grams or ml)</label><input class="inp" id="wg" type="text" inputmode="decimal" value="${g}"><div class="b mt" id="wc"></div><div class="xs mut">Carbs are worked out from the database’s figure per 100 g. Estimates only.</div><div class="row mt"><button class="btn ghost grow" data-act="web-back">Back</button><button class="btn primary grow" data-act="web-add">Add to meal</button></div></div>`;
+  webCalc();setTimeout(()=>{const w=$('#wg');if(w){w.focus();w.select();}},50);
+};
+ACT['web-back']=()=>{if(F.webq) ACT['web-food']({dataset:{q:F.webq}});};
+ACT['web-add']=()=>{
+  const x=F.web[F.wi],g=pf($('#wg').value)||0; if(!(g>0)){toast('Enter how much you ate');return;}
+  const c=webCalc(),n=(x.brand&&!x.n.toLowerCase().includes(x.brand.toLowerCase())?x.brand+' ':'')+x.n+' ('+Math.round(g)+' g)';
+  F.items.push({n,c,q:1,e:'🍽️'});rememberFood(n,c);$('#msel').innerHTML=mealSel();$('#mweb').innerHTML='';if($('#mq'))$('#mq').value='';$('#mres').innerHTML=mealResults('');toast('Added — '+c+' g carbs');
+};
 ACT['meal-q']=el=>{const i=+el.dataset.i,it=F.items[i];it.q=Math.round((it.q+pf(el.dataset.d))*2)/2;if(it.q<=0)F.items.splice(i,1);$('#msel').innerHTML=mealSel();};
-ACT['meal-custom']=()=>{const n=($('#cname').value||'').trim(),c=pf($('#ccarb').value);if(!n||!(c>=0)){toast('Add a name and carbs');return;}F.items.push({n,c,q:1,e:'🍽️'});$('#cname').value='';$('#ccarb').value='';$('#msel').innerHTML=mealSel();};
+ACT['meal-custom']=()=>{const n=($('#cname').value||'').trim(),c=pf($('#ccarb').value);if(!n||!(c>=0)){toast('Add a name and carbs');return;}F.items.push({n,c,q:1,e:'🍽️'});rememberFood(n,c);$('#cname').value='';$('#ccarb').value='';$('#msel').innerHTML=mealSel();};
 ACT['save-meal']=()=>{
+  const ED=F.editRec;
   if(!F.items.length){toast('Add at least one food');return;}
   const tot=mealTotal(), tg=F.slot==='snack'?cfg().carb_snack:cfg().carb_meal;
-  withBadges(()=>put({type:'meal',slot:F.slot,items:F.items.map(i=>({n:i.n,c:i.c,q:i.q})),carbs:tot,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
-  closeSheet();render(true);toast(tot>tg*1.25?`🍽️ Logged ${tot} g — a bit over target, walk after if you can`:'🍽️ Meal logged +4 pts');
+  withBadges(()=>put({...E(ED),type:'meal',slot:F.slot,items:F.items.map(i=>({n:i.n,c:i.c,q:i.q})),carbs:tot,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  closeSheet();render(true);if(ED){toast('✔ Meal updated');return;}toast(tot>tg*1.25?`🍽️ Logged ${tot} g — a bit over target, walk after if you can`:'🍽️ Meal logged +4 pts');
 };
 ACT['walk-start']=()=>{meta.walkStart=now();persist();closeSheet();render(true);toast('Timer started — enjoy your walk 🚶');};
 ACT['walk-finish']=()=>{
@@ -188,29 +224,54 @@ ACT['walk-finish']=()=>{
   setTimeout(()=>{openAdd('glucose',{ctx:'walk'});toast('Check your sugar after your walk');},700);
 };
 ACT['save-walk']=()=>{
+  const ED=F.editRec;
   const m=pf($('#wm').value);if(!(m>0)||m>600){toast('Enter minutes');return;}
-  withBadges(()=>put({type:'walk',min:Math.round(m),kind:F.kind2,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
-  closeSheet();render(true);toast('🚶 Activity logged');
+  withBadges(()=>put({...E(ED),type:'walk',min:Math.round(m),kind:F.kind2,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  closeSheet();render(true);toast(ED?'✔ Activity updated':'🚶 Activity logged');
 };
 ACT['save-mood']=()=>{
+  const ED=F.editRec;
   const sym=F.sym.slice(), low=sym.filter(s=>['Shaky','Sweaty','Dizzy','Very hungry','Fast heartbeat','Irritable'].includes(s)).length, high=sym.filter(s=>['Very thirsty','Need to wee a lot','Blurry vision'].includes(s)).length;
-  withBadges(()=>put({type:'mood',mood:F.mood,symptoms:sym,sleep:pf($('#sl').value)||0,stress:F.stress,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  withBadges(()=>put({...E(ED),type:'mood',mood:F.mood,symptoms:sym,sleep:pf($('#sl').value)||0,stress:F.stress,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
   closeSheet();render(true);
+  if(ED){toast('✔ Mood updated');return;}
   if(low>=2||high>=2){setTimeout(()=>sheet(`<h2>Check your sugar now</h2><p class="lead mt">${low>=2?'Shaky, sweaty, dizzy or hungry can be signs of <b>low</b> sugar.':'Very thirsty, blurry vision or lots of wees can be signs of <b>high</b> sugar.'} A quick check tells you what to do.</p><button class="btn primary block mt2" data-act="add" data-v="glucose">🩸 Log my sugar</button>`),300);}
   else toast('🙂 Mood logged');
 };
 ACT['treat-pick']=el=>{const t=SD.treats[+el.dataset.i];$('#tw').value=t.n;$('#tc').value=t.c;};
 ACT['save-treat']=()=>{
+  const ED=F.editRec;
   const what=($('#tw').value||'').trim(); if(!what){toast('What did you have?');return;}
   const c=cfg(), before=A.weekTreats().n;
-  withBadges(()=>put({type:'treat',what,carbs:pf($('#tc').value)||0,craving:!!F.craving,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
+  withBadges(()=>put({...E(ED),type:'treat',what,carbs:pf($('#tc').value)||0,craving:!!F.craving,note:($('#fn').value||'').trim(),ts:parseTime($('#ft'))||now()}));
   closeSheet();render(true);
+  if(ED){toast('✔ Treat updated');return;}
   toast(before+1>c.treats_week?'Over this week’s budget — that’s okay, tomorrow is a fresh start 💛':'🍫 Enjoy it! Recheck sugar in about 2 hours.');
 };
 ACT.recheck=()=>{meta.recheck=now()+15*MIN;persist();closeSheet();render(true);toast('⏱️ Timer set — recheck in 15 minutes');};
 ACT['treat-pause']=()=>{meta.pause=now()+15*MIN;persist();render(true);toast('⏳ Pausing 15 minutes. Drink some water.');};
 ACT['treat-resist']=()=>{withBadges(()=>put({type:'resist'}));meta.pause=0;persist();render(true);toast('🎉 Cravings beaten +15 pts — proud of you!');};
 ACT['rescue-list']=()=>sheet(`<h2>Fast sugar for a low</h2><div class="sm mut">About 15 g — pick one:</div><div class="mt">${SD.rescue.map(r=>`<div class="item"><div class="ico">${r[0]}</div><div class="grow"><div class="t">${r[1]}</div><div class="d">${r[2]}</div></div></div>`).join('')}</div><div class="banner crit mt"><div class="sm">Recheck in 15 minutes and repeat if still low. If she can’t swallow or is confused, call <b>10177</b> / <b>112</b>.</div></div><button class="btn primary block mt" data-act="close">Got it</button>`);
+ACT.edit=el=>{
+  const r=A.recs()[el.dataset.id]; if(!r||r.del) return;
+  F={kind:r.type,editRec:r};
+  if(r.type==='glucose') F.ctx=r.ctx||'random';
+  else if(r.type==='insulin'){const k=cfg().insulins.findIndex(i=>i.n===r.name);F.ins=k>=0?k:'o';}
+  else if(r.type==='meal'){F.slot=r.slot||'snack';F.items=(r.items||[]).map(i=>({n:i.n,c:i.c,q:i.q,e:(allFoods().find(f=>f.n===i.n)||{}).e||'🍽️'}));}
+  else if(r.type==='walk') F.kind2=r.kind||'walk';
+  else if(r.type==='mood'){F.mood=r.mood||3;F.sym=(r.symptoms||[]).slice();F.stress=r.stress||'low';}
+  else if(r.type==='treat') F.craving=!!r.craving;
+  else {F={};return;}
+  sheet(addHtml());
+  const set=(id,v)=>{const e=$('#'+id);if(e)e.value=v;};
+  set('ft',toLocalInput(r.ts));set('fn',r.note||'');
+  if(r.type==='glucose') set('gv',fmtG(r.v));
+  if(r.type==='insulin'){set('iu',r.units);if(F.ins==='o')set('insother',r.name);}
+  if(r.type==='walk') set('wm',r.min);
+  if(r.type==='mood') set('sl',r.sleep||'');
+  if(r.type==='treat'){set('tw',r.what);set('tc',r.carbs||'');}
+  const d=$('#ft')&&$('#ft').closest('details'); if(d) d.open=true;
+};
 ACT.del=el=>{const id=el.dataset.id;confirmSheet('Delete this entry?','Delete',()=>{A.del(id);render(true);toast('Deleted');});};
 ACT['note-kind']=el=>{const t=($('#notetext')||{}).value||'';U.noteKind=el.dataset.v;render(true);$('#notetext').value=t;};
 ACT['note-post']=()=>{const t=($('#notetext').value||'').trim();if(!t){toast('Write something first');return;}put({type:'note',kind:U.noteKind,text:t});render(true);toast('Posted 💌');};
@@ -339,10 +400,12 @@ A.sync.listeners.push(()=>{ if(U.tab==='me'||meta.code) { const dot=$('.sync-dot
 /* ---------- events ---------- */
 const RO_ALLOW=new Set(['go','close','yes','toggle','sub','prog','food-filter','tip','plan-day','note-kind','note-post','note-del','react','push-help','forgot','rs-kind','rs-send','rs-confirm','push-on','sos-way','invite','chat-open','chat-back','chat-send','msg-del','post-photo','post-clear','post-go','follow-add','follow-del','show-pin','show-fpin','sync-now','sync-leave','open-sync','sync-go','export','install','install-dismiss','rescue-list','ob-role','ob-next','notif-enable','quote-next','resync','call','call-accept','call-decline','call-end','call-mute','call-cam','otp-send','otp-go']);
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=ACT[el.dataset.act];if(f){e.preventDefault();if(meta.ro&&!RO_ALLOW.has(el.dataset.act)){toast('👀 View-only — family can look but not edit');return;}f(el,e);}});
+let webT=0;
 document.addEventListener('input',e=>{
   const t=e.target;
   if(t.id==='foodq'){U.foodQ=t.value;$('#foodlist').innerHTML=U.foodList();}
-  else if(t.id==='mq'){$('#mres').innerHTML=mealResults(t.value);}
+  else if(t.id==='mq'){$('#mres').innerHTML=mealResults(t.value);if($('#mweb'))$('#mweb').innerHTML='';clearTimeout(webT);const q=t.value.trim();if(q.length>=3&&!$('#mres [data-act="meal-add"]'))webT=setTimeout(()=>{if($('#mq')&&$('#mq').value.trim()===q&&!$('#mres [data-act="meal-add"]'))ACT['web-food']({dataset:{q}});},900);}
+  else if(t.id==='wg'&&F.web){webCalc();}
 });
 document.addEventListener('change',e=>{
   const t=e.target;
