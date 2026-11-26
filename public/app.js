@@ -280,10 +280,10 @@ ACT['react']=el=>{const t=el.dataset.id,e=el.dataset.e,id='rx_'+t+'_'+(meta.me||
   if(cur&&!cur.del&&cur.e===e){A.del(id);} else {put({id,type:'react',t,e});}
   softRender();};
 ACT['post-photo']=()=>{const f=$('#postfile');if(f)f.click();};
-ACT['post-clear']=()=>{U.postImg='';render(true);};
+ACT['post-clear']=()=>{U.postImg='';try{sessionStorage.removeItem('steady.postImg');}catch(_){}render(true);};
 ACT['post-go']=()=>{const cap=(($('#postcap')||{}).value||'').trim().slice(0,400);
   if(!U.postImg){toast('Choose a photo first 📷');return;}
-  put({type:'post',text:cap,img:U.postImg});U.postImg='';render(true);toast('Shared 📸');};
+  put({type:'post',text:cap,img:U.postImg});U.postImg='';try{sessionStorage.removeItem('steady.postImg');}catch(_){}render(true);toast('Shared 📸');};
 function shrinkImg(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file),im=new Image();
   im.onload=()=>{URL.revokeObjectURL(url);
     for(const M of [640,480,360,260]){const k=Math.min(1,M/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*k)),h=Math.max(1,Math.round(im.naturalHeight*k)),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);
@@ -292,7 +292,7 @@ function shrinkImg(file){return new Promise((res,rej)=>{const url=URL.createObje
     rej(new Error('big'));};
   im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('bad'));};im.src=url;});}
 document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='postfile'||!t.files||!t.files[0])return;
-  const cap=(($('#postcap')||{}).value||'');try{U.postImg=await shrinkImg(t.files[0]);U.postCap=cap;render(true);}catch(x){toast(x&&x.message==='big'?'That photo is too detailed — try another':'Couldn’t read that photo — if it’s HEIC, take a new one with the camera');}t.value='';});
+  const cap=(($('#postcap')||{}).value||'');try{U.postImg=await shrinkImg(t.files[0]);U.postCap=cap;try{sessionStorage.setItem('steady.postImg',U.postImg);}catch(_){}render(true);toast('Photo ready ✔ — tap “Share with everyone”');setTimeout(()=>{const i=document.querySelector('.pimg');if(i)i.scrollIntoView({block:'center',behavior:'smooth'});},120);}catch(x){toast(x&&x.message==='big'?'That photo is too detailed — try another':'Couldn’t read that photo — if it’s HEIC, take a new one with the camera');}t.value='';});
 A.onSessionEnd=why=>{render(true);toast(why==='session_expired'?'🔒 The PIN was changed — please log in again':'🔒 Logged out — please log in again');setTimeout(()=>ACT['open-sync']({dataset:{v:'join'}}),400);};
 
 /* profile actions */
@@ -436,6 +436,7 @@ function boot(){
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();U.deferred=e;if(U.tab==='home')softRender();});
   window.addEventListener('appinstalled',()=>{meta.installSeen=2;persist();});
   render();
+  try{const pi=sessionStorage.getItem('steady.postImg');if(pi&&meta.onboarded){U.postImg=pi;U.tab='care';render(true);toast('Your photo is still here — tap “Share with everyone”');}}catch(_){}
   if(!meta.onboarded){F={step:'ob1',role:meta.role||'patient'};sheet(obHtml());}
   const sp=new URLSearchParams(location.search), sc=(sp.get('s')||'').toUpperCase();
   if(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(sc)&&!meta.code){meta.lastCode=sc;persist();if(meta.onboarded)setTimeout(()=>ACT['open-sync']({dataset:{v:'join'}}),300);}
