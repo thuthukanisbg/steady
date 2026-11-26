@@ -285,12 +285,14 @@ ACT['post-go']=()=>{const cap=(($('#postcap')||{}).value||'').trim().slice(0,400
   if(!U.postImg){toast('Choose a photo first 📷');return;}
   put({type:'post',text:cap,img:U.postImg});U.postImg='';render(true);toast('Shared 📸');};
 function shrinkImg(file){return new Promise((res,rej)=>{const url=URL.createObjectURL(file),im=new Image();
-  im.onload=()=>{const M=640,k=Math.min(1,M/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.round(im.naturalWidth*k),h=Math.round(im.naturalHeight*k),c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);URL.revokeObjectURL(url);
-    let q=.7,d=c.toDataURL('image/jpeg',q);while(d.length>110000&&q>.3){q-=.1;d=c.toDataURL('image/jpeg',q);}
-    d.length>135000||!d.startsWith('data:image/jpeg')?rej(new Error('big')):res(d);};
+  im.onload=()=>{URL.revokeObjectURL(url);
+    for(const M of [640,480,360,260]){const k=Math.min(1,M/Math.max(im.naturalWidth,im.naturalHeight)),w=Math.max(1,Math.round(im.naturalWidth*k)),h=Math.max(1,Math.round(im.naturalHeight*k)),c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,w,h);x.drawImage(im,0,0,w,h);
+      let q=.7,d=c.toDataURL('image/jpeg',q);while(d.length>110000&&q>.3){q-=.1;d=c.toDataURL('image/jpeg',q);}
+      if(d.startsWith('data:image/jpeg')&&d.length<=135000)return res(d);}
+    rej(new Error('big'));};
   im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('bad'));};im.src=url;});}
 document.addEventListener('change',async e=>{const t=e.target;if(t.id!=='postfile'||!t.files||!t.files[0])return;
-  const cap=(($('#postcap')||{}).value||'');try{U.postImg=await shrinkImg(t.files[0]);U.postCap=cap;render(true);}catch(x){toast('Couldn’t use that photo — try another');}t.value='';});
+  const cap=(($('#postcap')||{}).value||'');try{U.postImg=await shrinkImg(t.files[0]);U.postCap=cap;render(true);}catch(x){toast(x&&x.message==='big'?'That photo is too detailed — try another':'Couldn’t read that photo — if it’s HEIC, take a new one with the camera');}t.value='';});
 A.onSessionEnd=why=>{render(true);toast(why==='session_expired'?'🔒 The PIN was changed — please log in again':'🔒 Logged out — please log in again');setTimeout(()=>ACT['open-sync']({dataset:{v:'join'}}),400);};
 
 /* profile actions */
